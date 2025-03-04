@@ -2,8 +2,8 @@ import os
 import shutil
 import time
 
-source = r'C:\Users\ajays\OneDrive\Desktop\FilesMover\source'
-destination = r'C:\Users\ajays\OneDrive\Desktop\FilesMover\dest'
+source = r'C:\Users\ajays\OneDrive\Desktop\Source'
+destination = r'C:\Users\ajays\OneDrive\Desktop\Dest'
 
 def move_files():
     while True:
@@ -13,6 +13,12 @@ def move_files():
             destination_item = os.path.join(destination, item)
 
             try:
+                # Check if the destination already exists and delete it if it does
+                if os.path.exists(destination_item):
+                    if os.path.isfile(destination_item):
+                        os.remove(destination_item)
+                    elif os.path.isdir(destination_item):
+                        shutil.rmtree(destination_item)
                 # Check if it's a file or folder and move it
                 if os.path.isfile(source_item):
                     shutil.move(source_item, destination_item)
