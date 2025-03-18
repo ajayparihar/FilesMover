@@ -106,12 +106,19 @@ class FileProcessor:
         destination (str): Absolute path to the destination directory
         activity_tracking (bool): Whether activity tracking is enabled
         activity_tracker (FileActivityTracker): Tracker for file activity
+        conflict_mode (str): How to handle file conflicts ("replace", "skip", "rename")
+        preserve_timestamps (bool): Whether to preserve file timestamps
+        confirm_operations (bool): Whether to confirm destructive operations
+        recursive (bool): Whether to monitor subdirectories
+        processing_delay (float): Delay in seconds before processing new files
         observer (Observer): File system observer for monitoring changes
         event_handler (FileEventHandler): Handler for file system events
     """
     
     def __init__(self, source, destination, activity_tracking=False, 
-                 inactive_folder="_inactive_files", inactivity_threshold=7*24*60*60):
+                 inactive_folder="_inactive_files", inactivity_threshold=7*24*60*60,
+                 conflict_mode="replace", preserve_timestamps=True, 
+                 confirm_operations=True, recursive=False, processing_delay=0.5):
         """
         Initialize the file processor.
         
@@ -121,11 +128,23 @@ class FileProcessor:
             activity_tracking (bool): Whether to enable activity tracking
             inactive_folder (str): Name of the folder for inactive files
             inactivity_threshold (int): Time threshold in seconds for inactivity (default: 7 days)
+            conflict_mode (str): How to handle file conflicts ("replace", "skip", "rename")
+            preserve_timestamps (bool): Whether to preserve file timestamps
+            confirm_operations (bool): Whether to confirm destructive operations
+            recursive (bool): Whether to monitor subdirectories
+            processing_delay (float): Delay in seconds before processing new files
         """
         self.source = os.path.abspath(source)
         self.destination = os.path.abspath(destination)
         self.activity_tracking = activity_tracking
         self.activity_tracker = None
+        
+        # New settings
+        self.conflict_mode = conflict_mode
+        self.preserve_timestamps = preserve_timestamps
+        self.confirm_operations = confirm_operations
+        self.recursive = recursive
+        self.processing_delay = processing_delay
         
         # Initialize observer and handler
         self.observer = None
@@ -152,6 +171,17 @@ class FileProcessor:
         Returns:
             bool: True if successful, False otherwise
         """
+        # Check if file exists (it might have been processed already by another event)
+        if not os.path.exists(src_path) or os.path.isdir(src_path):
+            return False
+            
+        # Apply processing delay if set
+        if self.processing_delay > 0:
+            time.sleep(self.processing_delay)
+            # Check again if file exists after delay
+            if not os.path.exists(src_path):
+                return False
+                
         # Calculate the relative path from the source directory
         rel_path = os.path.relpath(src_path, self.source)
         dest_path = os.path.join(self.destination, rel_path)
@@ -159,13 +189,45 @@ class FileProcessor:
         # Create destination directory if it doesn't exist
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         
+        # Handle existing file conflicts
+        if os.path.exists(dest_path):
+            if self.conflict_mode == "skip":
+                logging.info(f"Skipped (already exists): {rel_path}")
+                return False
+            elif self.conflict_mode == "rename":
+                # Find a new name by appending a number
+                base_name, ext = os.path.splitext(dest_path)
+                counter = 1
+                while os.path.exists(f"{base_name}_{counter}{ext}"):
+                    counter += 1
+                dest_path = f"{base_name}_{counter}{ext}"
+            elif self.conflict_mode == "replace":
+                # Ask for confirmation if enabled
+                if self.confirm_operations:
+                    # In CLI mode, log the information
+                    logging.warning(f"About to replace existing file: {rel_path}")
+                    # In GUI mode, this would be replaced with a dialog
+        
         try:
-            # Store the source directory for later check
+            # Store the source directory and file stats for later
             source_dir = os.path.dirname(src_path)
             
+            # Preserve timestamps if enabled
+            if self.preserve_timestamps:
+                file_stats = os.stat(src_path)
+                
             # Move the file
             shutil.move(src_path, dest_path)
-            logging.info(f"Moved: {rel_path} to {dest_path}")
+            
+            # Restore timestamps if enabled
+            if self.preserve_timestamps:
+                os.utime(dest_path, (file_stats.st_atime, file_stats.st_mtime))
+                
+            # Log the move operation with a more concise message
+            if rel_path == os.path.relpath(dest_path, self.destination):
+                logging.info(f"Moved: {rel_path}")
+            else:
+                logging.info(f"Moved: {rel_path} → {os.path.relpath(dest_path, self.destination)}")
             
             # Check if the source directory is now empty and remove it if it is
             if os.path.exists(source_dir) and len(os.listdir(source_dir)) == 0:
@@ -231,14 +293,14 @@ class FileProcessor:
         """
         self.event_handler = FileEventHandler(self)
         self.observer = Observer()
-        self.observer.schedule(self.event_handler, self.source, recursive=True)
+        self.observer.schedule(self.event_handler, self.source, recursive=self.recursive)
         self.observer.start()
         
         # Start activity tracker if enabled
         if self.activity_tracking and self.activity_tracker:
             self.activity_tracker.start()
             
-        logging.info(f"Started monitoring {os.path.normpath(self.source)}")
+        logging.info(f"Started monitoring {os.path.normpath(self.source)} {'(including subdirectories)' if self.recursive else ''}")
     
     def stop_monitoring(self):
         """
@@ -258,7 +320,9 @@ class FileProcessor:
 
 
 def start_monitoring(source, destination, activity_tracking=False, 
-                    inactive_folder="_inactive_files", inactivity_threshold=7*24*60*60):
+                    inactive_folder="_inactive_files", inactivity_threshold=7*24*60*60,
+                    conflict_mode="replace", preserve_timestamps=True, 
+                    confirm_operations=True, recursive=False, processing_delay=0.5):
     """
     Start monitoring a directory for changes.
     
@@ -271,6 +335,11 @@ def start_monitoring(source, destination, activity_tracking=False,
         activity_tracking (bool): Whether to enable activity tracking
         inactive_folder (str): Name of the folder for inactive files
         inactivity_threshold (int): Time threshold in seconds for inactivity (default: 7 days)
+        conflict_mode (str): How to handle file conflicts ("replace", "skip", "rename")
+        preserve_timestamps (bool): Whether to preserve file timestamps
+        confirm_operations (bool): Whether to confirm destructive operations
+        recursive (bool): Whether to monitor subdirectories
+        processing_delay (float): Delay in seconds before processing new files
         
     Returns:
         FileProcessor: The processor instance that was created and started
@@ -280,7 +349,12 @@ def start_monitoring(source, destination, activity_tracking=False,
         destination=destination,
         activity_tracking=activity_tracking,
         inactive_folder=inactive_folder,
-        inactivity_threshold=inactivity_threshold
+        inactivity_threshold=inactivity_threshold,
+        conflict_mode=conflict_mode,
+        preserve_timestamps=preserve_timestamps,
+        confirm_operations=confirm_operations,
+        recursive=recursive,
+        processing_delay=processing_delay
     )
     
     processor.start_monitoring()

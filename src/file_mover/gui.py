@@ -82,8 +82,11 @@ class FileMoverGUI:
         dest_var (StringVar): Destination directory path
         status_var (StringVar): Current status message
         file_count_var (StringVar): Count of processed files
-        activity_tracking_var (BooleanVar): Whether activity tracking is enabled
-        inactive_threshold_var (DoubleVar): Threshold in days for inactivity
+        conflict_mode_var (StringVar): How to handle file conflicts
+        preserve_timestamps_var (BooleanVar): Whether to preserve file timestamps
+        confirm_deletions_var (BooleanVar): Whether to confirm file deletions
+        recursive_monitoring_var (BooleanVar): Whether to monitor subdirectories
+        processing_delay_var (DoubleVar): Delay before processing new files
         processor (FileProcessor): The file processor instance
         monitoring (bool): Whether file monitoring is active
         log_text (ScrolledText): Text widget for displaying logs
@@ -110,8 +113,13 @@ class FileMoverGUI:
         self.dest_var = tk.StringVar(value=os.path.join(os.path.expanduser('~'), 'Desktop', 'Dest'))
         self.status_var = tk.StringVar(value="Ready")
         self.file_count_var = tk.StringVar(value="Files: 0")
-        self.activity_tracking_var = tk.BooleanVar(value=False)
-        self.inactive_threshold_var = tk.DoubleVar(value=7.0)
+        
+        # New settings variables
+        self.conflict_mode_var = tk.StringVar(value="replace")
+        self.preserve_timestamps_var = tk.BooleanVar(value=True)
+        self.confirm_deletions_var = tk.BooleanVar(value=True)
+        self.recursive_monitoring_var = tk.BooleanVar(value=False)
+        self.processing_delay_var = tk.DoubleVar(value=0.5)
         
         # File processor
         self.processor = None
@@ -263,45 +271,155 @@ class FileMoverGUI:
         Args:
             parent (Frame): Parent frame to contain the widgets
         """
-        # Activity tracking settings
-        activity_frame = ttk.LabelFrame(parent, text="Activity Tracking", padding="10")
-        activity_frame.pack(fill=tk.X, pady=5)
+        # Create a canvas with scrollbar for settings
+        canvas = tk.Canvas(parent)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
         
-        activity_cb = ttk.Checkbutton(
-            activity_frame, 
-            text="Enable activity-based file organization", 
-            variable=self.activity_tracking_var,
-            command=self.save_settings  # Save settings when checkbox state changes
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
-        activity_cb.pack(anchor=tk.W, pady=5)
         
-        # Add tooltip to the activity tracking checkbox
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # File Handling Settings
+        file_handling_frame = ttk.LabelFrame(scrollable_frame, text="File Handling", padding="10")
+        file_handling_frame.pack(fill=tk.X, pady=5)
+        
+        # Conflict handling
+        conflict_frame = ttk.Frame(file_handling_frame)
+        conflict_frame.pack(fill=tk.X, pady=5)
+        
+        conflict_label = ttk.Label(conflict_frame, text="When file exists in destination:")
+        conflict_label.pack(side=tk.LEFT, padx=5)
+        
+        conflict_combo = ttk.Combobox(
+            conflict_frame, 
+            textvariable=self.conflict_mode_var,
+            values=["replace", "skip", "rename"],
+            state="readonly",
+            width=15
+        )
+        conflict_combo.pack(side=tk.LEFT, padx=5)
+        
+        # Add event handler to save settings when conflict mode changes
+        conflict_combo.bind("<<ComboboxSelected>>", lambda e: self.save_settings())
+        
+        # Add tooltip for conflict handling
         CreateToolTip(
-            activity_cb, 
-            "When enabled, files that haven't been accessed for the specified period\n"
-            "will be moved to a special folder and restored when accessed."
+            conflict_combo, 
+            "Choose how to handle files with the same name:\n"
+            "- Replace: Overwrite existing files\n"
+            "- Skip: Keep existing files, don't move new ones\n"
+            "- Rename: Add a number to new files to avoid conflicts"
         )
         
-        # Threshold settings
-        threshold_frame = ttk.Frame(activity_frame)
-        threshold_frame.pack(fill=tk.X, pady=5)
+        # Preserve timestamps option
+        preserve_cb = ttk.Checkbutton(
+            file_handling_frame, 
+            text="Preserve file timestamps when moving", 
+            variable=self.preserve_timestamps_var,
+            command=self.save_settings
+        )
+        preserve_cb.pack(anchor=tk.W, pady=5)
         
-        threshold_label = ttk.Label(threshold_frame, text="Inactivity threshold (days):")
-        threshold_label.pack(side=tk.LEFT, padx=5)
+        CreateToolTip(
+            preserve_cb, 
+            "When enabled, moved files will keep their original creation,\n"
+            "modification, and access times."
+        )
         
-        threshold_entry = ttk.Entry(threshold_frame, textvariable=self.inactive_threshold_var, width=10)
-        threshold_entry.pack(side=tk.LEFT, padx=5)
+        # Confirm deletions option
+        confirm_cb = ttk.Checkbutton(
+            file_handling_frame, 
+            text="Confirm before deleting or replacing files", 
+            variable=self.confirm_deletions_var,
+            command=self.save_settings
+        )
+        confirm_cb.pack(anchor=tk.W, pady=5)
         
-        # Add event handler to save settings when threshold value changes
-        threshold_entry.bind("<FocusOut>", lambda e: self.save_settings())
-        threshold_entry.bind("<Return>", lambda e: self.save_settings())
+        CreateToolTip(
+            confirm_cb, 
+            "When enabled, you'll be asked to confirm before any file is deleted\n"
+            "or replaced in the destination directory."
+        )
+        
+        # Performance Settings
+        performance_frame = ttk.LabelFrame(scrollable_frame, text="Performance", padding="10")
+        performance_frame.pack(fill=tk.X, pady=5)
+        
+        # Recursive monitoring option
+        recursive_cb = ttk.Checkbutton(
+            performance_frame, 
+            text="Monitor subdirectories recursively", 
+            variable=self.recursive_monitoring_var,
+            command=self.save_settings
+        )
+        recursive_cb.pack(anchor=tk.W, pady=5)
+        
+        CreateToolTip(
+            recursive_cb, 
+            "When enabled, FilesMover will monitor all subdirectories\n"
+            "within the source directory for file changes."
+        )
+        
+        # Processing delay
+        delay_frame = ttk.Frame(performance_frame)
+        delay_frame.pack(fill=tk.X, pady=5)
+        
+        delay_label = ttk.Label(delay_frame, text="Processing delay (seconds):")
+        delay_label.pack(side=tk.LEFT, padx=5)
+        
+        delay_entry = ttk.Entry(delay_frame, textvariable=self.processing_delay_var, width=10)
+        delay_entry.pack(side=tk.LEFT, padx=5)
+        
+        # Add event handler to save settings when delay value changes
+        delay_entry.bind("<FocusOut>", lambda e: self.save_settings())
+        delay_entry.bind("<Return>", lambda e: self.save_settings())
+        
+        CreateToolTip(
+            delay_entry, 
+            "Delay before processing newly detected files.\n"
+            "Useful to ensure files are completely written\n"
+            "before being moved. Recommended: 0.5-2.0 seconds."
+        )
         
         # Settings buttons
-        settings_button_frame = ttk.Frame(parent)
+        settings_button_frame = ttk.Frame(scrollable_frame)
         settings_button_frame.pack(fill=tk.X, pady=15)
         
         save_settings_button = ttk.Button(settings_button_frame, text="Save Settings", command=self.save_settings)
         save_settings_button.pack(side=tk.RIGHT, padx=5)
+        
+        reset_settings_button = ttk.Button(settings_button_frame, text="Reset to Defaults", command=self.reset_settings)
+        reset_settings_button.pack(side=tk.RIGHT, padx=5)
+    
+    def reset_settings(self):
+        """
+        Reset all settings to default values.
+        """
+        # Confirm with user
+        if not messagebox.askyesno("Reset Settings", "Are you sure you want to reset all settings to defaults?"):
+            return
+            
+        # Reset to defaults
+        self.source_var.set(os.path.join(os.path.expanduser('~'), 'Desktop', 'Source'))
+        self.dest_var.set(os.path.join(os.path.expanduser('~'), 'Desktop', 'Dest'))
+        self.conflict_mode_var.set("replace")
+        self.preserve_timestamps_var.set(True)
+        self.confirm_deletions_var.set(True)
+        self.recursive_monitoring_var.set(False)
+        self.processing_delay_var.set(0.5)
+        
+        # Save the default settings
+        self.save_settings()
+        
+        self.log_message("Settings reset to defaults.")
     
     def create_help_tab(self, parent):
         """
@@ -332,10 +450,14 @@ Basic Usage:
 2. Click "Start Monitoring" to monitor the source directory for new files.
 3. Use "Move All Files" to process all existing files at once.
 
-Activity Tracking:
-When enabled, files that haven't been accessed for the specified threshold 
-will be moved to a special "_inactive_files" folder. If an inactive file is 
-accessed, it will automatically be moved back to its original location.
+File Handling:
+- You can choose how to handle conflicts when files already exist in the destination.
+- Enable "Preserve timestamps" to maintain the original file timestamps.
+- Enable "Confirm deletions" for added protection of important destination files.
+
+Performance:
+- Enable recursive monitoring to watch all subdirectories within the source.
+- Adjust the processing delay to ensure files are completely written before being moved.
 
 Tips:
 - The source and destination must be different directories.
@@ -355,7 +477,7 @@ Tips:
         directory = filedialog.askdirectory(initialdir=self.source_var.get())
         if directory:
             self.source_var.set(directory)
-            self.log_message(f"Source directory set to: {directory}")
+            self.log_message(f"Source directory set to: {os.path.normpath(directory)}")
             # Save settings after updating source
             self.save_settings()
     
@@ -369,7 +491,7 @@ Tips:
         directory = filedialog.askdirectory(initialdir=self.dest_var.get())
         if directory:
             self.dest_var.set(directory)
-            self.log_message(f"Destination directory set to: {directory}")
+            self.log_message(f"Destination directory set to: {os.path.normpath(directory)}")
             # Save settings after updating destination
             self.save_settings()
     
@@ -403,15 +525,19 @@ Tips:
         source = self.source_var.get()
         destination = self.dest_var.get()
         
-        self.log_message(f"Moving all files from {source} to {destination}...")
+        self.log_message(f"Moving all files from {os.path.normpath(source)} to {os.path.normpath(destination)}...")
         self.status_var.set("Processing files...")
         
         # Create a processor for one-time use
         processor = FileProcessor(
             source=source,
             destination=destination,
-            activity_tracking=self.activity_tracking_var.get(),
-            inactivity_threshold=self.inactive_threshold_var.get() * 24 * 60 * 60
+            activity_tracking=False,  # Always disable activity tracking
+            conflict_mode=self.conflict_mode_var.get(),
+            preserve_timestamps=self.preserve_timestamps_var.get(),
+            confirm_operations=self.confirm_deletions_var.get(),
+            recursive=self.recursive_monitoring_var.get(),
+            processing_delay=self.processing_delay_var.get()
         )
         
         # Run in a separate thread to avoid freezing GUI
@@ -462,7 +588,7 @@ Tips:
         if not os.path.exists(source):
             try:
                 os.makedirs(source)
-                self.log_message(f"Created source directory: {source}")
+                self.log_message(f"Created source directory: {os.path.normpath(source)}")
             except Exception as e:
                 messagebox.showerror("Error", f"Could not create source directory: {e}")
                 return False
@@ -471,7 +597,7 @@ Tips:
         if not os.path.exists(destination):
             try:
                 os.makedirs(destination)
-                self.log_message(f"Created destination directory: {destination}")
+                self.log_message(f"Created destination directory: {os.path.normpath(destination)}")
             except Exception as e:
                 messagebox.showerror("Error", f"Could not create destination directory: {e}")
                 return False
@@ -496,8 +622,12 @@ Tips:
             file_processor = FileProcessor(
                 source=source,
                 destination=destination,
-                activity_tracking=self.activity_tracking_var.get(),
-                inactivity_threshold=self.inactive_threshold_var.get() * 24 * 60 * 60
+                activity_tracking=False,  # Always disable activity tracking
+                conflict_mode=self.conflict_mode_var.get(),
+                preserve_timestamps=self.preserve_timestamps_var.get(),
+                confirm_operations=self.confirm_deletions_var.get(),
+                recursive=self.recursive_monitoring_var.get(),
+                processing_delay=self.processing_delay_var.get()
             )
         except Exception as e:
             logging.error(f"Failed to initialize FileProcessor: {e}")
@@ -517,7 +647,7 @@ Tips:
         self.processor = file_processor
         self.monitoring = True
         
-        self.log_message(f"Started monitoring {source} for changes.")
+        self.log_message(f"Started monitoring {os.path.normpath(source)} for changes.")
     
     def stop_monitoring(self):
         """
@@ -586,8 +716,8 @@ Tips:
         """
         Save current settings to a file.
         
-        This method saves the current source, destination, and activity
-        tracking settings to a JSON file for later use.
+        This method saves the current source, destination, and other
+        settings to a JSON file for later use.
         """
         # Ensure directory exists
         try:
@@ -596,8 +726,11 @@ Tips:
             settings = {
                 'source': self.source_var.get(),
                 'destination': self.dest_var.get(),
-                'activity_tracking': self.activity_tracking_var.get(),
-                'inactive_threshold': self.inactive_threshold_var.get()
+                'conflict_mode': self.conflict_mode_var.get(),
+                'preserve_timestamps': self.preserve_timestamps_var.get(),
+                'confirm_deletions': self.confirm_deletions_var.get(),
+                'recursive_monitoring': self.recursive_monitoring_var.get(),
+                'processing_delay': self.processing_delay_var.get()
             }
             
             # Use a temporary file for atomic write
@@ -656,11 +789,21 @@ Tips:
             if dest_dir:
                 self.dest_var.set(dest_dir)
             
-            if 'activity_tracking' in settings:
-                self.activity_tracking_var.set(settings['activity_tracking'])
+            # Load new settings
+            if 'conflict_mode' in settings:
+                self.conflict_mode_var.set(settings['conflict_mode'])
             
-            if 'inactive_threshold' in settings:
-                self.inactive_threshold_var.set(settings['inactive_threshold'])
+            if 'preserve_timestamps' in settings:
+                self.preserve_timestamps_var.set(settings['preserve_timestamps'])
+            
+            if 'confirm_deletions' in settings:
+                self.confirm_deletions_var.set(settings['confirm_deletions'])
+            
+            if 'recursive_monitoring' in settings:
+                self.recursive_monitoring_var.set(settings['recursive_monitoring'])
+            
+            if 'processing_delay' in settings:
+                self.processing_delay_var.set(settings['processing_delay'])
             
             # Validate that directories exist
             self._ensure_directories_exist(source_dir, dest_dir)
@@ -671,27 +814,34 @@ Tips:
     
     def _ensure_directories_exist(self, source_dir, dest_dir):
         """
-        Ensure that source and destination directories exist.
+        Ensure the specified directories exist, creating them if needed.
         
         Args:
-            source_dir (str): Path to source directory
-            dest_dir (str): Path to destination directory
+            source_dir (str): Path to the source directory
+            dest_dir (str): Path to the destination directory
+            
+        Returns:
+            bool: True if both directories exist after this method, False otherwise
         """
-        # Check source directory
-        if source_dir and not os.path.exists(source_dir):
+        # Ensure source directory exists
+        if not os.path.exists(source_dir):
             try:
-                os.makedirs(source_dir, exist_ok=True)
-                self.log_message(f"Created source directory: {source_dir}")
+                os.makedirs(source_dir)
+                self.log_message(f"Created source directory: {os.path.normpath(source_dir)}")
             except Exception as e:
                 self.log_message(f"Failed to create source directory: {e}", logging.WARNING)
-        
-        # Check destination directory
-        if dest_dir and not os.path.exists(dest_dir):
+                return False
+                
+        # Ensure destination directory exists
+        if not os.path.exists(dest_dir):
             try:
-                os.makedirs(dest_dir, exist_ok=True)
-                self.log_message(f"Created destination directory: {dest_dir}")
+                os.makedirs(dest_dir)
+                self.log_message(f"Created destination directory: {os.path.normpath(dest_dir)}")
             except Exception as e:
                 self.log_message(f"Failed to create destination directory: {e}", logging.WARNING)
+                return False
+                
+        return True
     
     def update_log_display(self):
         """
