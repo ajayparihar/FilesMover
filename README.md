@@ -1,4 +1,4 @@
-# File Mover
+# FilesMover
 
 A user-friendly tool to automatically move files from a source directory to a destination directory. The application monitors a folder for new files or modifications and moves them in real-time to a destination folder.
 
@@ -8,7 +8,8 @@ A user-friendly tool to automatically move files from a source directory to a de
 - **Real-time file monitoring** - automatically moves files as they appear
 - **Manual processing option** - process all existing files with one click
 - **Directory structure preservation** - maintains folder structure when moving files
-- **Detailed activity logging** with color-coded status messages
+- **Activity-based file organization** - automatically organizes files based on usage patterns
+- **Detailed activity logging** with status messages
 - **Command-line interface** for automation and scripting
 - **Simple unified launcher** to run either GUI or CLI versions
 - **Settings persistence** to remember your preferences
@@ -29,83 +30,80 @@ A user-friendly tool to automatically move files from a source directory to a de
    ```
    install.bat
    ```
-3. This will install required dependencies and optionally create a desktop shortcut
 
 ## Usage
 
-### GUI Application
+### GUI Mode (Default)
 
-1. Double-click `run_file_mover.bat` to start the application
-2. Set your source and destination directories (or use the defaults)
-3. Click "Start Monitoring" to begin automatic file moving
-4. Files added to the source directory will be automatically moved to the destination
+1. Run the application by double-clicking `run.bat` or using:
+   ```
+   scripts\run_file_mover.bat
+   ```
+2. Set the source and destination directories using the interface
+3. Click "Start Monitoring" to begin watching for files, or "Move All Files" to process existing files
 
-### Command-line Interface
+### Command Line Mode
 
-For automation or scripting, use the command-line interface:
-
+Run the application in CLI mode using:
 ```
-run_file_mover.bat --cli [options]
+scripts\run_file_mover.bat --cli
 ```
 
-Available CLI options:
-- `-s, --source`: Source directory path (default: ~/Desktop/Source)
-- `-d, --destination`: Destination directory path (default: ~/Desktop/Dest)
-- `-o, --one-time`: Process existing files once and exit
-- `--verbose`: Enable verbose logging
+#### CLI Options:
+```
+-s, --source SOURCE       Source directory path
+-d, --destination DEST    Destination directory path
+-o, --one-time            Process existing files once and exit
+-a, --activity-tracking   Enable activity-based file organization
+-t, --inactive-threshold  Inactivity threshold in days (default: 7)
+--verbose                 Enable verbose logging
+-l, --log-file LOG_FILE   Custom log file path
+```
 
-For full command-line help:
-```
-run_file_mover.bat --help
-```
+## Activity-Based File Organization
+
+When activity tracking is enabled, FilesMover will:
+
+1. Monitor file access patterns in your source directory
+2. Move files that haven't been accessed for a specified period (default: 7 days) to a special "_inactive_files" folder
+3. Automatically restore files to their original location when they are accessed again
+
+This feature helps keep your workspace clean while ensuring all files remain accessible.
 
 ## Code Structure
 
-The application has been optimized for simplicity and maintainability:
+The application follows a modular design:
 
-- `core_file_mover.py` - Core functionality for file moving and monitoring
-- `file_mover_gui.py` - Graphical user interface
-- `file_mover_cli.py` - Command-line interface
-- `run_file_mover.bat` - Unified launcher script
-
-## Application Data
-
-The application stores its data in the user's home directory:
-
-- Settings: `~/.file_mover/settings.json`
-- Log files: `~/.file_mover/logs/file_mover_[timestamp].log`
-
-## Common Use Cases
-
-- **Automated file sorting**: Move files from a download folder to organized locations
-- **Backup solution**: Automatically backup new files to another location
-- **Workflow automation**: Move processed files to the next stage in a workflow
-- **Network drive syncing**: Move files from local to network storage
+```
+FilesMover/
+├── scripts/               # Batch scripts for running the application
+│   ├── install.bat        # Installation script
+│   └── run_file_mover.bat # Main launcher script
+├── src/                   # Source code
+│   ├── file_mover/        # Main package
+│   │   ├── __init__.py    # Package initialization
+│   │   ├── core.py        # Core file processing functionality
+│   │   ├── activity_tracker.py # Activity-based file organization
+│   │   ├── cli.py         # Command line interface
+│   │   └── gui.py         # Graphical user interface
+│   ├── file_mover_cli.py  # CLI entry point
+│   └── file_mover_gui.py  # GUI entry point
+├── run.bat                # Convenience launcher
+├── setup.py               # Setup script
+└── requirements.txt       # Python dependencies
+```
 
 ## Troubleshooting
 
-### Common Issues and Solutions
-
-- **Files not moving**: Ensure both source and destination paths are valid and accessible
-- **Application not starting**: Check if Python and required libraries are installed
-- **Permission errors**: Run the application with appropriate permissions
-- **Files in use**: Some files may not move if they are currently in use by other applications
-- **Additional log information**: Check the log files in `~/.file_mover/logs/` for detailed operation logs
-
-## Contributing
-
-Contributions are welcome! If you'd like to improve the application:
-
-1. Fork the repository
-2. Create a new branch (`git checkout -b feature/improvement`)
-3. Make your changes
-4. Submit a pull request
+- **File permissions issues**: Ensure you have write access to both source and destination directories
+- **Python not found**: Make sure Python is installed and added to your system PATH
+- **Missing modules**: Run `pip install -r requirements.txt` to install all required dependencies
 
 ## License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 
-- Built with [Python](https://www.python.org/)
-- File monitoring powered by [Watchdog](https://github.com/gorakhargosh/watchdog) 
+- Built with Python and Tkinter
+- Uses the watchdog library for file system monitoring 
