@@ -85,12 +85,11 @@ class FileEventHandler(FileSystemEventHandler):
         Args:
             event (FileSystemEvent): The file system event object
         """
-        # Skip directory events, only process file events
+        # Handle directory and file events differently
         if event.is_directory:
-            return
-        
-        src_path = event.src_path
-        self.processor.process_file(src_path)
+            self.processor.process_directory(event.src_path)
+        else:
+            self.processor.process_file(event.src_path)
 
 
 class FileProcessor:
@@ -317,6 +316,38 @@ class FileProcessor:
             self.activity_tracker.stop()
             
         logging.info(f"Stopped monitoring {os.path.normpath(self.source)}")
+
+    def process_directory(self, src_dir):
+        """
+        Process a directory by creating the corresponding directory in the destination.
+        
+        This method creates a directory in the destination that matches the structure
+        of the source directory. If the directory already exists in the destination,
+        it will be kept as is.
+        
+        Args:
+            src_dir (str): Absolute path to the source directory
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Check if directory exists
+        if not os.path.exists(src_dir) or not os.path.isdir(src_dir):
+            return False
+            
+        # Calculate the relative path from the source directory
+        rel_path = os.path.relpath(src_dir, self.source)
+        dest_dir = os.path.join(self.destination, rel_path)
+        
+        # Create destination directory if it doesn't exist
+        try:
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir, exist_ok=True)
+                logging.info(f"Created directory: {rel_path}")
+            return True
+        except OSError as e:
+            logging.error(f"Error creating directory {rel_path}: {e}")
+            return False
 
 
 def start_monitoring(source, destination, activity_tracking=False, 

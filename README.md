@@ -1,8 +1,31 @@
 # FilesMover
 
-A user-friendly tool to automatically move files from a source directory to a destination directory. The application monitors a folder for new files or modifications and moves them in real-time to a destination folder.
+A user-friendly tool to automatically monitor and move files from a source directory to a destination directory in real-time. The application provides both a graphical user interface (GUI) and command-line interface (CLI) for flexibility.
 
-## Features
+## Table of Contents
+
+- [User Guide](#user-guide)
+  - [Features](#features)
+  - [Installation](#installation)
+  - [Getting Started](#getting-started)
+  - [Using the GUI](#using-the-gui)
+  - [Using the Command Line](#using-the-command-line)
+  - [Configuration Options](#configuration-options)
+  - [Troubleshooting](#troubleshooting)
+- [Developer Guide](#developer-guide)
+  - [Architecture Overview](#architecture-overview)
+  - [Core Components](#core-components)
+  - [Technology Stack](#technology-stack)
+  - [Code Structure](#code-structure)
+  - [Development Guidelines](#development-guidelines)
+- [Additional Information](#additional-information)
+  - [Version History](#version-history)
+  - [License](#license)
+  - [Acknowledgments](#acknowledgments)
+
+## User Guide
+
+### Features
 
 - **Easy-to-use GUI** with intuitive controls and helpful tooltips
 - **Real-time file monitoring** - automatically moves files as they appear
@@ -14,213 +37,323 @@ A user-friendly tool to automatically move files from a source directory to a de
 - **Recursive monitoring** - option to monitor subdirectories
 - **Processing delay control** - prevents processing incomplete files
 - **Detailed activity logging** with status messages
-- **Command-line interface** for automation and scripting
-- **Simple unified launcher** to run either GUI or CLI versions
+- **Activity-based file organization** - automatically manages files based on usage patterns
 - **Settings persistence** to remember your preferences
-- **Automatic log file creation** for tracking all operations
-- **Comprehensive documentation** for both users and developers
-- **File organization utility** to arrange files into categorized directories
-- **File cleanup utility** to remove unnecessary files and free up space
-- **File organization utility** with automatic cleanup of unnecessary files
 
-## Installation
+### Installation
 
-### Prerequisites
+#### Prerequisites
 - Python 3.6 or higher
 - Required Python libraries:
   - watchdog (for file system monitoring)
   - tkinter (for GUI, included with Python)
 
-### Setup
+#### Setup Instructions
 
-1. Clone or download this repository
-2. Run the install.bat file to set up the application:
+1. **Clone or download this repository** to your local machine
+   ```
+   git clone https://github.com/yourusername/FilesMover.git
+   cd FilesMover
+   ```
+
+2. **Install required dependencies** using pip:
+   ```
+   pip install -r requirements.txt
+   ```
+
+3. **Run the install script** (Windows):
    ```
    scripts\install.bat
    ```
    
-For detailed installation instructions, see [INSTALL.md](INSTALL.md).
+   This script will:
+   - Verify Python installation
+   - Install required dependencies
+   - Create necessary directories
+   - Set up environment variables (if needed)
 
-## Usage
+### Getting Started
 
-### GUI Mode (Default)
+The simplest way to get started with FilesMover is:
 
-1. Run the application by double-clicking `run.bat` or using:
+1. Launch the application by double-clicking `run.bat`
+2. Set your source and destination folders using the "Browse" buttons
+3. Click "Start Monitoring" to begin automatically moving files
+4. Any new files added to your source folder will be moved to the destination folder
+
+### Using the GUI
+
+The graphical interface provides easy access to all features:
+
+1. **Launch the application** by double-clicking `run.bat` or using:
    ```
    scripts\run_file_mover.bat
    ```
-2. Set the source and destination directories using the interface
-3. Click "Start Monitoring" to begin watching for files, or "Move All Files" to process existing files
 
-### Command Line Mode
+2. **Main Controls Tab**:
+   - Set source and destination directories using the browse buttons
+   - Start/Stop monitoring with the toggle button
+   - Use "Move All Files" to process existing files immediately
+   - View real-time activity in the log section
 
-Run the application in CLI mode using:
-```
-scripts\run_file_mover.bat --cli
-```
+3. **Settings Tab**:
+   - **File Handling**:
+     - Conflict Mode: Choose how to handle duplicate files
+     - Preserve Timestamps: Keep original file dates
+     - Confirm Operations: Get prompted before replacements
+   - **Performance**:
+     - Recursive Monitoring: Include subdirectories
+     - Processing Delay: Wait time before processing new files
+   - **Activity Tracking**:
+     - Enable/disable activity-based organization
+     - Set inactive folder name and thresholds
 
-#### CLI Options:
-```
--s, --source SOURCE             Source directory path
--d, --destination DEST          Destination directory path
--o, --one-time                  Process existing files once and exit
--c, --conflict-mode MODE        How to handle file conflicts (replace, skip, rename)
--p, --preserve-timestamps       Preserve file timestamps when moving (default)
---no-preserve-timestamps        Do not preserve file timestamps
---confirm-operations            Confirm before replacing or deleting files (default)
---no-confirm-operations         Do not confirm before replacing or deleting files
--r, --recursive                 Monitor subdirectories recursively
---processing-delay SECONDS      Delay before processing newly detected files
---verbose                       Enable verbose logging
--l, --log-file LOG_FILE         Custom log file path
-```
+4. **Help Tab**:
+   - View basic usage instructions
+   - Find troubleshooting tips
+   - Access additional resources
 
-### File Organization Utility
+### Using the Command Line
 
-FilesMover includes a dedicated utility for organizing files into categorized directories and cleaning up unnecessary files:
+For automation and scripting, the command-line interface offers all the same functionality:
 
 ```
-arrange_files.bat [source_dir] [destination_dir] [options]
+scripts\run_file_mover.bat --cli [options]
 ```
 
-#### Organization Options:
+#### Basic CLI Examples:
+
+1. **Simple monitoring** with default settings:
+   ```
+   scripts\run_file_mover.bat --cli -s C:\Source -d D:\Destination
+   ```
+
+2. **One-time processing** (move all files and exit):
+   ```
+   scripts\run_file_mover.bat --cli -s C:\Source -d D:\Destination --one-time
+   ```
+
+3. **Advanced configuration**:
+   ```
+   scripts\run_file_mover.bat --cli -s C:\Source -d D:\Destination -c rename -r --processing-delay 2.0
+   ```
+
+For a complete list of options, use:
 ```
---recursive, -r            Process subdirectories recursively
---keep-unnecessary, -k     Keep unnecessary files (don't remove them)
-```
-
-This utility:
-
-1. Creates the following directory structure in the destination folder and moves files based on their extensions:
-   - **documents/** - Text files, documents, spreadsheets, presentations (.txt, .doc, .pdf, .xlsx, etc.)
-   - **images/** - Image files (.jpg, .png, .gif, etc.)
-   - **audio/** - Audio files (.mp3, .wav, .flac, etc.)
-   - **video/** - Video files (.mp4, .avi, .mkv, etc.)
-   - **archives/** - Compressed archives (.zip, .rar, .7z, etc.)
-   - **code/** - Source code and programming files (.py, .js, .html, etc.)
-   - **executables/** - Executable and installable files (.exe, .msi, .bat, etc.)
-   - **misc/** - Any other file types not covered above
-
-2. Automatically removes unnecessary files during organization:
-   - Temporary files (*.tmp, *.temp, ~*, etc.)
-   - Thumbnail caches (Thumbs.db, .DS_Store, etc.)
-   - Log files (*.log, *.log.*)
-   - Compiled code (*.pyc, __pycache__, etc.)
-   - IDE and editor files (.vscode, .idea, etc.)
-
-### File Cleanup Utility
-
-FilesMover includes a utility to identify and remove unnecessary files:
-
-```
-cleanup.bat [directory] [options]
+scripts\run_file_mover.bat --cli --help
 ```
 
-#### Cleanup Options:
+### Configuration Options
+
+#### File Handling Settings
+
+1. **Conflict Handling**:
+   - **Replace**: Overwrite existing files in the destination (default)
+   - **Skip**: Keep existing files in the destination, don't move new ones
+   - **Rename**: Add a number suffix to new files to avoid conflicts (file.txt → file_1.txt)
+
+2. **Preserve Timestamps**: 
+   - When enabled, moved files maintain their original creation, modification, and access times
+   - When disabled, files get new timestamps when moved
+
+3. **Confirm Operations**:
+   - When enabled, you'll be asked to confirm before any file is deleted or replaced
+   - When disabled, operations proceed automatically without confirmation
+
+#### Performance Settings
+
+1. **Recursive Monitoring**:
+   - When enabled, all subdirectories within the source directory will be monitored
+   - When disabled, only the top-level source directory is monitored
+
+2. **Processing Delay**:
+   - Adds a delay (in seconds) before processing newly detected files
+   - Useful for ensuring files are completely written before processing
+   - Especially important for large files or network drives
+
+#### Activity Tracking Settings
+
+1. **Inactive Folder**:
+   - Folder name for storing inactive files (default: "_inactive_files")
+   - Created as a subdirectory of the destination directory
+
+2. **Inactivity Threshold**:
+   - Time (in seconds) before a file is considered inactive
+   - Default is 7 days (604,800 seconds)
+
+### Troubleshooting
+
+#### Common Problems and Solutions
+
+1. **Application won't start**:
+   - Ensure Python 3.6+ is installed and in your PATH
+   - Verify all dependencies are installed: `pip install -r requirements.txt`
+   - Check permissions on the application directory
+
+2. **Files aren't being moved**:
+   - Verify source and destination paths are correct and accessible
+   - Check that monitoring is actually started (status should say "Monitoring")
+   - Ensure you have write permissions on both directories
+   - Look for error messages in the log display or log files
+
+3. **File access errors**:
+   - Files may be locked by another process
+   - Try increasing the processing delay to allow files to be fully written
+   - Check for antivirus software that might be blocking operations
+
+4. **Performance issues**:
+   - Large directories with many files may cause slowdowns
+   - Consider disabling recursive monitoring if not needed
+   - Increase processing delay for network drives
+
+#### Locating Log Files
+
+Log files are automatically created in:
 ```
---recursive, -r            Process subdirectories recursively
---dry-run, -d              Only report files without deleting (default)
---trash DIR, -t DIR        Move files to this directory instead of deleting
---min-size SIZE, -s SIZE   Minimum file size in bytes to consider
---days-unused DAYS, -u DAYS  Remove files not accessed in this many days
---pattern PATTERN, -p PATTERN  Additional file pattern to match
+~/.file_mover/logs/file_mover_YYYYMMDD_HHMMSS.log
 ```
 
-This utility identifies and removes unnecessary files such as:
-- Temporary files (*.tmp, *.temp, ~*, etc.)
-- Thumbnail caches (Thumbs.db, .DS_Store, etc.)
-- Browser caches (*.crdownload, *.part, etc.)
-- Log files (*.log, *.log.*)
-- Compiled code (*.pyc, __pycache__, etc.)
-- Debug files (*.pdb, *.dmp, etc.)
-- Package management files (node_modules, etc.)
-- IDE and editor files (.vscode, .idea, etc.)
+These logs contain detailed information about all operations and errors.
 
-By default, it runs in "dry-run" mode to show what would be removed without actually deleting anything. Use the `--no-dry-run` option to actually remove files.
+## Developer Guide
 
-Note: This functionality is now integrated into the File Organization Utility. Use `arrange_files.bat` with the `--keep-unnecessary` option to skip cleanup during organization.
+### Architecture Overview
 
-## File Handling Settings
+FilesMover follows a modular design with clear separation of concerns:
 
-FilesMover provides several options to control how files are handled:
+1. **Core Module** (`core.py`):
+   - Contains the core file processing logic
+   - Implements `FileProcessor` for moving files between directories
+   - Implements `FileEventHandler` for handling file system events
+   - Provides monitoring functionality via watchdog library
 
-1. **Conflict Handling**: Choose how to handle files with the same name in the destination:
-   - Replace: Overwrite existing files (default)
-   - Skip: Keep existing files, don't move new ones
-   - Rename: Add a number to new files to avoid conflicts
+2. **GUI Module** (`gui.py`):
+   - Implements the graphical interface using tkinter
+   - `FileMoverGUI` class manages the interface and user interactions
+   - Provides tabbed interface for main controls, settings, and help
+   - Implements thread-safe logging with `QueueHandler`
 
-2. **Preserve Timestamps**: When enabled, moved files maintain their original creation, modification, and access times.
+3. **CLI Module** (`cli.py`):
+   - Provides command-line interface for the application
+   - Parses command-line arguments and configures the processor
+   - Supports one-time processing or continuous monitoring
 
-3. **Confirm Deletions**: When enabled, you'll be asked to confirm before any file is deleted or replaced in the destination directory.
+4. **Activity Tracker Module** (`activity_tracker.py`):
+   - Implements `FileActivityTracker` for tracking file access patterns
+   - Manages inactive file storage and restoration
+   - Provides thread-safe operation with the main file processor
 
-## Performance Settings
+### Core Components
 
-Performance-related settings allow you to optimize how FilesMover works:
+1. **FileProcessor**:
+   - Main class responsible for file operations
+   - Handles file conflicts according to configuration
+   - Preserves file timestamps when configured
+   - Maintains directory structure during file moves
 
-1. **Recursive Monitoring**: When enabled, all subdirectories within the source directory will be monitored.
+2. **FileEventHandler**:
+   - Extends watchdog's `FileSystemEventHandler`
+   - Detects file creation and modification events
+   - Delegates to `FileProcessor` for handling files
 
-2. **Processing Delay**: Adds a delay before processing newly detected files. This is useful to ensure files are completely written before being moved, especially for large files or network drives.
+3. **FileMoverGUI**:
+   - Manages the tkinter interface
+   - Implements settings persistence
+   - Provides real-time logging display
+   - Handles background processing threads
 
-## Code Structure
+4. **FileActivityTracker**:
+   - Tracks file access timestamps
+   - Identifies inactive files based on access patterns
+   - Moves inactive files to a designated folder
+   - Restores files when they're accessed again
 
-The application follows a modular design:
+### Technology Stack
+
+1. **Core Technologies**:
+   - Python 3.6+: Main programming language
+   - watchdog: File system monitoring
+   - tkinter: GUI framework
+   - threading: Concurrent operations
+   - logging: Application logging
+
+2. **File Operations**:
+   - os, shutil: File system operations
+   - json: Settings storage
+   - queue: Thread-safe communication
+   - argparse: Command-line argument parsing
+
+### Code Structure
 
 ```
 FilesMover/
 ├── scripts/               # Batch scripts for running the application
 │   ├── install.bat        # Installation script
-│   ├── run_file_mover.bat # Main launcher script
-│   ├── organize_files.bat # File organization script
-│   └── cleanup_files.bat  # File cleanup script
+│   └── run_file_mover.bat # Main launcher script
 ├── src/                   # Source code
 │   ├── file_mover/        # Main package
 │   │   ├── __init__.py    # Package initialization
 │   │   ├── core.py        # Core file processing functionality
 │   │   ├── cli.py         # Command line interface
 │   │   ├── gui.py         # Graphical user interface
-│   │   ├── organize_files.py # File organization utility
-│   │   └── cleanup_files.py  # File cleanup utility
+│   │   └── activity_tracker.py  # Activity tracking functionality
 │   ├── file_mover_cli.py  # CLI entry point
 │   └── file_mover_gui.py  # GUI entry point
 ├── run.bat                # Convenience launcher for main app
-├── organize.bat           # Convenience launcher for file organization
-├── cleanup.bat            # Convenience launcher for file cleanup
-├── setup.py               # Setup script
 ├── requirements.txt       # Python dependencies
-├── INSTALL.md             # Detailed installation instructions
-└── DEVELOPER.md           # Documentation for developers
+├── README.md              # This documentation file
+└── LICENSE                # License information
 ```
 
-For detailed developer documentation, see [DEVELOPER.md](DEVELOPER.md).
+### Development Guidelines
 
-## Troubleshooting
+#### Adding New Features
 
-If you encounter issues while using FilesMover, consider the following solutions:
+1. **File Handling Extensions**:
+   - Add new methods to `FileProcessor` class in `core.py`
+   - Ensure proper error handling and logging
+   - Update GUI and CLI interfaces to expose new functionality
 
-- **Ensure Python is installed correctly**: Verify that Python 3.6 or higher is installed and added to your system's PATH.
-- **Check dependencies**: Make sure all required Python libraries are installed. You can reinstall them using:
-  ```
-  pip install -r requirements.txt
-  ```
-- **File permissions**: Ensure that the application has the necessary permissions to read from the source directory and write to the destination directory.
-- **Log files**: Check the log files for any error messages or warnings that might indicate the problem.
+2. **GUI Enhancements**:
+   - Add new widgets to appropriate sections in `gui.py`
+   - Update the settings storage mechanism if needed
+   - Maintain consistent styling and tooltips
 
-For further assistance, please refer to the [DEVELOPER.md](DEVELOPER.md) or contact support.
+3. **CLI Options**:
+   - Add new arguments to the parser in `cli.py`
+   - Ensure backward compatibility with existing commands
+   - Update help documentation
 
-## Version History
+#### Coding Standards
+
+1. **Style Guidelines**:
+   - Follow PEP 8 for Python code style
+   - Use docstrings for all classes and methods
+   - Maintain consistent comment style
+
+2. **Error Handling**:
+   - Use appropriate try-except blocks
+   - Log all errors with sufficient context
+   - Display user-friendly error messages in GUI
+
+3. **Testing**:
+   - Test new features on multiple platforms
+   - Verify backward compatibility
+   - Test with various file types and directory structures
+
+## Additional Information
+
+### Version History
 
 - **0.2.0** - Current version with activity-based file organization and improved documentation
 - **0.1.0** - Initial release with basic file moving functionality
 
-## Author
-
-Developed by Bheb Developer
-
-## License
+### License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Acknowledgments
+### Acknowledgments
 
 - Built with Python and Tkinter
 - Uses the watchdog library for file system monitoring
+- Thanks to all contributors and users for feedback and suggestions
