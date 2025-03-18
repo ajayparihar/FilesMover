@@ -2,7 +2,7 @@ import os
 import shutil
 import logging
 import tkinter as tk
-from tkinter import ttk, filedialog, scrolledtext, messagebox
+from tkinter import ttk, filedialog, scrolledtext
 import json
 from datetime import datetime
 import time
@@ -292,11 +292,11 @@ class FilesMoverGUI:
         dest = self.dest_dir.get()
         
         if not source or not dest:
-            messagebox.showerror("Error", "Please select both source and destination directories")
+            tk.messagebox.showerror("Error", "Please select both source and destination directories")
             return
             
         if not os.path.exists(source):
-            messagebox.showerror("Error", "Source directory does not exist")
+            tk.messagebox.showerror("Error", "Source directory does not exist")
             return
             
         try:
