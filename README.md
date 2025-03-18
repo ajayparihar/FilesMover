@@ -2,8 +2,6 @@
 
 A user-friendly tool to automatically move files from a source directory to a destination directory. The application monitors a folder for new files or modifications and moves them in real-time to a destination folder.
 
-![File Mover Screenshot](screenshots/file_mover_screenshot.png)
-
 ## Features
 
 - **Easy-to-use GUI** with intuitive controls and helpful tooltips
@@ -11,80 +9,71 @@ A user-friendly tool to automatically move files from a source directory to a de
 - **Manual processing option** - process all existing files with one click
 - **Directory structure preservation** - maintains folder structure when moving files
 - **Detailed activity logging** with color-coded status messages
-- **File counter** to track operations
-- **Progress indicators** to show active monitoring
-- **Error handling** with clear error messages
-- **Help documentation** built into the application
-- **Customizable settings** for tailored operation
+- **Command-line interface** for automation and scripting
+- **Simple unified launcher** to run either GUI or CLI versions
+- **Settings persistence** to remember your preferences
+- **Automatic log file creation** for tracking all operations
 
 ## Installation
 
 ### Prerequisites
 - Python 3.6 or higher
 - Required Python libraries:
-  - tkinter (usually comes with Python)
-  - watchdog
+  - watchdog (for file system monitoring)
+  - tkinter (for GUI, included with Python)
 
 ### Setup
 
 1. Clone or download this repository
-2. Install the required dependencies:
+2. Run the install.bat file to set up the application:
    ```
-   pip install watchdog
+   install.bat
    ```
-3. Run the application using the provided batch file or directly with Python
+3. This will install required dependencies and optionally create a desktop shortcut
 
 ## Usage
 
-### GUI Application (Recommended)
+### GUI Application
 
-1. Double-click `run_file_mover_gui.bat` to start the GUI application
+1. Double-click `run_file_mover.bat` to start the application
 2. Set your source and destination directories (or use the defaults)
 3. Click "Start Monitoring" to begin automatic file moving
 4. Files added to the source directory will be automatically moved to the destination
 
-### Command-line Version
+### Command-line Interface
 
-If you prefer a command-line version:
+For automation or scripting, use the command-line interface:
 
-1. Run `watchdog_file_mover.py` for continuous monitoring:
-   ```
-   python watchdog_file_mover.py
-   ```
-   
-2. Or run `move_files.py` for the simple polling version:
-   ```
-   python move_files.py
-   ```
+```
+run_file_mover.bat --cli [options]
+```
 
-## GUI Overview
+Available CLI options:
+- `-s, --source`: Source directory path (default: ~/Desktop/Source)
+- `-d, --destination`: Destination directory path (default: ~/Desktop/Dest)
+- `-o, --one-time`: Process existing files once and exit
+- `--verbose`: Enable verbose logging
 
-The GUI application is organized into tabs for better usability:
+For full command-line help:
+```
+run_file_mover.bat --help
+```
 
-### Main Tab
-- Configure source and destination directories
-- Start and stop monitoring
-- Trigger manual file moving
-- View activity log
+## Code Structure
 
-### Settings Tab
-- Auto-start monitoring option
-- Auto-create directories option
-- Other customizable settings
+The application has been optimized for simplicity and maintainability:
 
-### Help Tab
-- Quick start guide
-- Feature explanations
-- Tips and tricks
+- `core_file_mover.py` - Core functionality for file moving and monitoring
+- `file_mover_gui.py` - Graphical user interface
+- `file_mover_cli.py` - Command-line interface
+- `run_file_mover.bat` - Unified launcher script
 
-## How It Works
+## Application Data
 
-The application uses the watchdog library to monitor the source directory for file system events:
+The application stores its data in the user's home directory:
 
-1. When a file is created or modified in the source directory, it triggers an event
-2. The application processes the event by moving the file to the destination
-3. If a file with the same name already exists in the destination, it is overwritten
-4. All activity is logged with timestamps for reference
+- Settings: `~/.file_mover/settings.json`
+- Log files: `~/.file_mover/logs/file_mover_[timestamp].log`
 
 ## Common Use Cases
 
@@ -101,6 +90,7 @@ The application uses the watchdog library to monitor the source directory for fi
 - **Application not starting**: Check if Python and required libraries are installed
 - **Permission errors**: Run the application with appropriate permissions
 - **Files in use**: Some files may not move if they are currently in use by other applications
+- **Additional log information**: Check the log files in `~/.file_mover/logs/` for detailed operation logs
 
 ## Contributing
 

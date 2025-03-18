@@ -1,20 +1,28 @@
-# pip install watchdog
 import os
 import shutil
 import time
 import logging
+import datetime
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Configure source and destination paths
-source = r'C:\Users\ajays\OneDrive\Desktop\Source'
-destination = r'C:\Users\ajays\OneDrive\Desktop\Dest'
+# Setup log directory
+LOG_DIR = os.path.join(os.path.expanduser('~'), '.file_mover', 'logs')
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Generate log filename with timestamp
+current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE = os.path.join(LOG_DIR, f"file_mover_{current_time}.log")
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler()
+    ]
 )
 
 class FileHandler(FileSystemEventHandler):
@@ -23,6 +31,10 @@ class FileHandler(FileSystemEventHandler):
     Processes files and directories by moving them to the destination.
     """
     
+    def __init__(self, source, destination):
+        self.source = source
+        self.destination = destination
+        
     def on_created(self, event):
         """Called when a file or directory is created"""
         self._process_event(event)
@@ -33,20 +45,16 @@ class FileHandler(FileSystemEventHandler):
         
     def _process_event(self, event):
         """Process file system events for files and directories"""
-        # Skip directory creation events that might be triggered during file creation
-        if event.is_directory:
-            return
-            
         src_path = event.src_path
         # Get the relative path from the source directory
-        rel_path = os.path.relpath(src_path, source)
+        rel_path = os.path.relpath(src_path, self.source)
         # Construct the destination path
-        dest_path = os.path.join(destination, rel_path)
+        dest_path = os.path.join(self.destination, rel_path)
         
         # Wait for any file operations to complete
         time.sleep(0.5)
         
-        # Only process if the file still exists (to avoid processing deleted files)
+        # Only process if the source path still exists
         if os.path.exists(src_path):
             move_item(src_path, dest_path)
 
@@ -83,16 +91,55 @@ def move_item(src_path, dest_path):
             logging.info(f'Moved directory: {src_path} -> {dest_path}')
     except Exception as e:
         logging.error(f'Error moving {src_path}: {e}')
+        return False
+    return True
 
-def main():
+def process_all_items(source, destination):
     """
-    Main function to start monitoring the source directory
-    using watchdog's event-driven approach.
+    Process all existing items in the source directory and move them to the destination.
+    
+    Args:
+        source: Source directory path
+        destination: Destination directory path
+    
+    Returns:
+        int: Number of items processed
+    """
+    count = 0
+    try:
+        # List all items in the source directory
+        for item in os.listdir(source):
+            source_item = os.path.join(source, item)
+            destination_item = os.path.join(destination, item)
+            
+            # Process files and directories
+            if move_item(source_item, destination_item):
+                count += 1
+                
+            # If it's a directory and it still exists (meaning it wasn't moved),
+            # recursively process its contents
+            if os.path.isdir(source_item) and os.path.exists(source_item):
+                count += process_all_items(source_item, os.path.join(destination, item))
+    except Exception as e:
+        logging.error(f"Error processing items: {e}")
+    
+    return count
+
+def start_monitoring(source, destination):
+    """
+    Start monitoring a directory for changes and move files to destination.
+    
+    Args:
+        source: Source directory path
+        destination: Destination directory path
+    
+    Returns:
+        tuple: (Observer, FileHandler) - The watchdog observer and event handler
     """
     # Ensure source and destination directories exist
     if not os.path.exists(source):
         logging.error(f"Source directory does not exist: {source}")
-        return
+        return None, None
     
     if not os.path.exists(destination):
         try:
@@ -100,34 +147,15 @@ def main():
             logging.info(f"Created destination directory: {destination}")
         except Exception as e:
             logging.error(f"Error creating destination directory: {e}")
-            return
-    
-    # Process any existing files in the source directory
-    for item in os.listdir(source):
-        source_item = os.path.join(source, item)
-        destination_item = os.path.join(destination, item)
-        move_item(source_item, destination_item)
+            return None, None
     
     # Set up the observer with the event handler
-    event_handler = FileHandler()
+    event_handler = FileHandler(source, destination)
     observer = Observer()
     observer.schedule(event_handler, source, recursive=True)
     
     # Start the observer
     observer.start()
-    
     logging.info(f"Started monitoring {source} for new files/folders...")
-    try:
-        # Keep the script running
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        # Stop the observer gracefully on keyboard interrupt
-        observer.stop()
-        logging.info("File monitoring stopped.")
     
-    # Wait for the observer to complete
-    observer.join()
-
-if __name__ == "__main__":
-    main() 
+    return observer, event_handler 

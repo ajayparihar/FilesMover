@@ -3,18 +3,15 @@ import sys
 import os
 import platform
 
-def install_package(package):
+def install_packages():
     """
-    Install a package using pip.
-    
-    Args:
-        package (str): The name of the package to install
+    Install required packages from requirements.txt
     
     Returns:
         bool: True if installation was successful, False otherwise
     """
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
         return True
     except subprocess.CalledProcessError:
         return False
@@ -24,7 +21,7 @@ def create_desktop_shortcut():
     try:
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        batch_file = os.path.join(script_dir, "run_file_mover_gui.bat")
+        batch_file = os.path.join(script_dir, "run_file_mover.bat")
         
         if platform.system() == "Windows":
             # For Windows, create a shortcut (.lnk) file
@@ -68,24 +65,12 @@ def main():
     
     # Install required packages
     print("Installing required packages...")
-    
-    packages = ["watchdog"]
-    failed_packages = []
-    
-    for package in packages:
-        print(f"Installing {package}...", end=" ")
-        if install_package(package):
-            print("OK")
-        else:
-            print("FAILED")
-            failed_packages.append(package)
-    
-    if failed_packages:
-        print("\nSome packages failed to install. Please install them manually:")
-        for package in failed_packages:
-            print(f"pip install {package}")
+    if install_packages():
+        print("All required packages installed successfully!")
     else:
-        print("\nAll required packages installed successfully!")
+        print("Failed to install packages from requirements.txt")
+        print("Please install them manually:")
+        print("pip install -r requirements.txt")
     
     # Ask to create desktop shortcut
     print("\nWould you like to create a desktop shortcut? (y/n)")
@@ -96,14 +81,12 @@ def main():
             # For Windows, we need pywin32 and winshell for shortcut creation
             if platform.system() == "Windows":
                 for package in ["pywin32", "winshell"]:
-                    if not install_package(package):
-                        print(f"Could not install {package}, skipping shortcut creation")
-                        break
-                else:  # This else belongs to the for loop, executed if no break
-                    if create_desktop_shortcut():
-                        print("Desktop shortcut created successfully!")
-                    else:
-                        print("Failed to create desktop shortcut")
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+                
+                if create_desktop_shortcut():
+                    print("Desktop shortcut created successfully!")
+                else:
+                    print("Failed to create desktop shortcut")
             else:
                 if create_desktop_shortcut():
                     print("Desktop shortcut created successfully!")
@@ -114,9 +97,10 @@ def main():
     
     print("\nSetup completed!")
     print("\nTo run the application:")
-    print("1. Double-click 'run_file_mover_gui.bat' (Windows)")
+    print("1. Double-click 'run_file_mover.bat' (Windows)")
     print("   OR")
-    print("2. Run 'python file_mover_gui.py' from the command line")
+    print("2. Run 'python file_mover_gui.py' for the GUI")
+    print("3. Run 'python file_mover_cli.py --help' for CLI options")
     print("\nThank you for installing File Mover!")
     
     input("\nPress Enter to exit...")
