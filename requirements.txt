@@ -1,2 +1,2 @@
 watchdog>=2.1.0
-tkinter  # Usually comes with Python installation 
+# tkinter is part of the Python standard library and doesn't need to be installed separately 
