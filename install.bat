@@ -1,6 +1,6 @@
 @echo off
 echo ======================================================
-echo             File Mover - Starting GUI...  
+echo          File Mover - Installation Setup  
 echo ======================================================
 echo.
 
@@ -14,17 +14,18 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-REM Try to run the GUI application
-echo Starting File Mover GUI...
-python file_mover_gui.py
+REM Run the setup script
+echo Running setup script...
+python setup.py
+
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo ERROR: Failed to start the File Mover GUI
-    echo Check if all required libraries are installed
-    echo Try running: pip install watchdog
+    echo ERROR: Setup failed
+    echo Please check the error messages above
     echo.
+    pause
+    exit /b 1
 )
 
 echo.
-echo If the application window didn't appear, check for errors above.
 pause 
