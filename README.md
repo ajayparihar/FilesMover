@@ -102,9 +102,17 @@ For detailed developer documentation, see [DEVELOPER.md](DEVELOPER.md).
 
 ## Troubleshooting
 
-- **File permissions issues**: Ensure you have write access to both source and destination directories
-- **Python not found**: Make sure Python is installed and added to your system PATH
-- **Missing modules**: Run `pip install -r requirements.txt` to install all required dependencies
+If you encounter issues while using FilesMover, consider the following solutions:
+
+- **Ensure Python is installed correctly**: Verify that Python 3.6 or higher is installed and added to your system's PATH.
+- **Check dependencies**: Make sure all required Python libraries are installed. You can reinstall them using:
+  ```
+  pip install -r requirements.txt
+  ```
+- **File permissions**: Ensure that the application has the necessary permissions to read from the source directory and write to the destination directory.
+- **Log files**: Check the log files for any error messages or warnings that might indicate the problem.
+
+For further assistance, please refer to the [DEVELOPER.md](DEVELOPER.md) or contact support.
 
 ## Version History
 

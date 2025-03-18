@@ -202,12 +202,12 @@ def main():
     
     if args.one_time:
         # Process all files once
-        logging.info(f"Processing all files from {source} to {destination}...")
+        logging.info(f"Processing all files from {os.path.normpath(source)} to {os.path.normpath(destination)}...")
         file_count = processor.process_all()
         logging.info(f"Processed {file_count} files.")
     else:
         # Start monitoring
-        logging.info(f"Starting file monitoring from {source} to {destination}...")
+        logging.info(f"Starting file monitoring from {os.path.normpath(source)} to {os.path.normpath(destination)}...")
         processor.start_monitoring()
         
         try:

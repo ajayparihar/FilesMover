@@ -160,9 +160,23 @@ class FileProcessor:
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         
         try:
+            # Store the source directory for later check
+            source_dir = os.path.dirname(src_path)
+            
             # Move the file
             shutil.move(src_path, dest_path)
             logging.info(f"Moved: {rel_path} to {dest_path}")
+            
+            # Check if the source directory is now empty and remove it if it is
+            if os.path.exists(source_dir) and len(os.listdir(source_dir)) == 0:
+                # Only remove directories under the source root
+                if os.path.commonpath([source_dir, self.source]) == self.source and source_dir != self.source:
+                    try:
+                        os.rmdir(source_dir)
+                        logging.info(f"Removed empty directory: {os.path.relpath(source_dir, self.source)}")
+                    except OSError as e:
+                        logging.warning(f"Could not remove empty directory {os.path.relpath(source_dir, self.source)}: {e}")
+            
             return True
         except (shutil.Error, PermissionError, OSError) as e:
             logging.error(f"Error moving {rel_path}: {e}")
@@ -174,17 +188,36 @@ class FileProcessor:
         
         This method walks through the source directory and moves all files
         to the destination directory, preserving the directory structure.
+        It also removes empty directories in the source afterward.
         
         Returns:
             int: Number of files processed
         """
         file_count = 0
         
-        for root, _, files in os.walk(self.source):
+        # First, collect all files to process
+        files_to_process = []
+        for root, _, files in os.walk(self.source, topdown=False):
             for file in files:
                 src_path = os.path.join(root, file)
-                if self.process_file(src_path):
-                    file_count += 1
+                files_to_process.append(src_path)
+        
+        # Process each file
+        for src_path in files_to_process:
+            if self.process_file(src_path):
+                file_count += 1
+        
+        # Now clean up any remaining empty directories
+        for root, dirs, files in os.walk(self.source, topdown=False):
+            # topdown=False ensures we process deepest directories first
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                if len(os.listdir(dir_path)) == 0:
+                    try:
+                        os.rmdir(dir_path)
+                        logging.info(f"Removed empty directory: {os.path.relpath(dir_path, self.source)}")
+                    except OSError as e:
+                        logging.warning(f"Could not remove empty directory {os.path.relpath(dir_path, self.source)}: {e}")
                 
         return file_count
     
@@ -205,7 +238,7 @@ class FileProcessor:
         if self.activity_tracking and self.activity_tracker:
             self.activity_tracker.start()
             
-        logging.info(f"Started monitoring {self.source}")
+        logging.info(f"Started monitoring {os.path.normpath(self.source)}")
     
     def stop_monitoring(self):
         """
@@ -221,7 +254,7 @@ class FileProcessor:
         if self.activity_tracking and self.activity_tracker:
             self.activity_tracker.stop()
             
-        logging.info(f"Stopped monitoring {self.source}")
+        logging.info(f"Stopped monitoring {os.path.normpath(self.source)}")
 
 
 def start_monitoring(source, destination, activity_tracking=False, 

@@ -102,6 +102,9 @@ class FileMoverGUI:
         self.root.geometry("800x600")
         self.root.minsize(650, 500)
         
+        # Ensure app data directory exists
+        os.makedirs(APP_DATA_DIR, exist_ok=True)
+        
         # Initialize variables
         self.source_var = tk.StringVar(value=os.path.join(os.path.expanduser('~'), 'Desktop', 'Source'))
         self.dest_var = tk.StringVar(value=os.path.join(os.path.expanduser('~'), 'Desktop', 'Dest'))
@@ -267,7 +270,8 @@ class FileMoverGUI:
         activity_cb = ttk.Checkbutton(
             activity_frame, 
             text="Enable activity-based file organization", 
-            variable=self.activity_tracking_var
+            variable=self.activity_tracking_var,
+            command=self.save_settings  # Save settings when checkbox state changes
         )
         activity_cb.pack(anchor=tk.W, pady=5)
         
@@ -287,6 +291,10 @@ class FileMoverGUI:
         
         threshold_entry = ttk.Entry(threshold_frame, textvariable=self.inactive_threshold_var, width=10)
         threshold_entry.pack(side=tk.LEFT, padx=5)
+        
+        # Add event handler to save settings when threshold value changes
+        threshold_entry.bind("<FocusOut>", lambda e: self.save_settings())
+        threshold_entry.bind("<Return>", lambda e: self.save_settings())
         
         # Settings buttons
         settings_button_frame = ttk.Frame(parent)
@@ -348,6 +356,8 @@ Tips:
         if directory:
             self.source_var.set(directory)
             self.log_message(f"Source directory set to: {directory}")
+            # Save settings after updating source
+            self.save_settings()
     
     def browse_destination(self):
         """
@@ -360,6 +370,8 @@ Tips:
         if directory:
             self.dest_var.set(directory)
             self.log_message(f"Destination directory set to: {directory}")
+            # Save settings after updating destination
+            self.save_settings()
     
     def toggle_monitoring(self):
         """
@@ -480,23 +492,29 @@ Tips:
         self.log_message("First moving all existing files before starting monitoring...")
         
         # Create the file processor
-        self.processor = FileProcessor(
-            source=source,
-            destination=destination,
-            activity_tracking=self.activity_tracking_var.get(),
-            inactivity_threshold=self.inactive_threshold_var.get() * 24 * 60 * 60
-        )
+        try:
+            file_processor = FileProcessor(
+                source=source,
+                destination=destination,
+                activity_tracking=self.activity_tracking_var.get(),
+                inactivity_threshold=self.inactive_threshold_var.get() * 24 * 60 * 60
+            )
+        except Exception as e:
+            logging.error(f"Failed to initialize FileProcessor: {e}")
+            messagebox.showerror("Initialization Error", "Failed to initialize the file processor. Please check the logs for more details.")
+            return
         
         # Process all existing files first
         try:
-            count = self.processor.process_all()
+            count = file_processor.process_all()
             self.update_file_count(count)
             self.log_message(f"Successfully moved {count} existing files/folders.", logging.INFO)
         except Exception as e:
             self.log_message(f"Error processing existing files: {e}", logging.ERROR)
         
         # Start monitoring
-        self.processor.start_monitoring()
+        file_processor.start_monitoring()
+        self.processor = file_processor
         self.monitoring = True
         
         self.log_message(f"Started monitoring {source} for changes.")
@@ -572,44 +590,71 @@ Tips:
         tracking settings to a JSON file for later use.
         """
         # Ensure directory exists
-        os.makedirs(APP_DATA_DIR, exist_ok=True)
-        
-        settings = {
-            'source': self.source_var.get(),
-            'destination': self.dest_var.get(),
-            'activity_tracking': self.activity_tracking_var.get(),
-            'inactive_threshold': self.inactive_threshold_var.get()
-        }
-        
         try:
-            with open(SETTINGS_FILE, 'w') as f:
-                json.dump(settings, f, indent=4)
+            os.makedirs(APP_DATA_DIR, exist_ok=True)
             
-            self.log_message("Settings saved successfully.")
+            settings = {
+                'source': self.source_var.get(),
+                'destination': self.dest_var.get(),
+                'activity_tracking': self.activity_tracking_var.get(),
+                'inactive_threshold': self.inactive_threshold_var.get()
+            }
+            
+            # Use a temporary file for atomic write
+            temp_file = f"{SETTINGS_FILE}.tmp"
+            try:
+                with open(temp_file, 'w') as f:
+                    json.dump(settings, f, indent=4)
+                
+                # On Windows, we need to remove the destination file first
+                if os.path.exists(SETTINGS_FILE):
+                    os.remove(SETTINGS_FILE)
+                    
+                # Rename temp file to the real settings file
+                os.rename(temp_file, SETTINGS_FILE)
+                
+                self.log_message("Settings saved successfully.")
+                return True
+            except Exception as e:
+                if os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                    except:
+                        pass
+                self.log_message(f"Error saving settings: {e}", logging.ERROR)
+                return False
+                
         except Exception as e:
-            self.log_message(f"Error saving settings: {e}", logging.ERROR)
+            self.log_message(f"Error preparing settings directory: {e}", logging.ERROR)
+            return False
     
     def load_settings(self):
         """
         Load settings from a file.
         
         This method loads previously saved settings from a JSON file
-        and applies them to the current instance.
+        and applies them to the current instance. It also validates
+        that directories exist and creates them if necessary.
         """
         if not os.path.exists(SETTINGS_FILE):
             self.log_message("No saved settings found. Using defaults.")
+            # If using defaults, make sure the default directories exist
+            self._ensure_directories_exist(self.source_var.get(), self.dest_var.get())
             return
         
         try:
             with open(SETTINGS_FILE, 'r') as f:
                 settings = json.load(f)
             
-            # Apply settings
-            if 'source' in settings:
-                self.source_var.set(settings['source'])
+            source_dir = settings.get('source', '')
+            dest_dir = settings.get('destination', '')
             
-            if 'destination' in settings:
-                self.dest_var.set(settings['destination'])
+            # Apply settings
+            if source_dir:
+                self.source_var.set(source_dir)
+            
+            if dest_dir:
+                self.dest_var.set(dest_dir)
             
             if 'activity_tracking' in settings:
                 self.activity_tracking_var.set(settings['activity_tracking'])
@@ -617,9 +662,36 @@ Tips:
             if 'inactive_threshold' in settings:
                 self.inactive_threshold_var.set(settings['inactive_threshold'])
             
+            # Validate that directories exist
+            self._ensure_directories_exist(source_dir, dest_dir)
+            
             self.log_message("Settings loaded successfully.")
         except Exception as e:
             self.log_message(f"Error loading settings: {e}", logging.ERROR)
+    
+    def _ensure_directories_exist(self, source_dir, dest_dir):
+        """
+        Ensure that source and destination directories exist.
+        
+        Args:
+            source_dir (str): Path to source directory
+            dest_dir (str): Path to destination directory
+        """
+        # Check source directory
+        if source_dir and not os.path.exists(source_dir):
+            try:
+                os.makedirs(source_dir, exist_ok=True)
+                self.log_message(f"Created source directory: {source_dir}")
+            except Exception as e:
+                self.log_message(f"Failed to create source directory: {e}", logging.WARNING)
+        
+        # Check destination directory
+        if dest_dir and not os.path.exists(dest_dir):
+            try:
+                os.makedirs(dest_dir, exist_ok=True)
+                self.log_message(f"Created destination directory: {dest_dir}")
+            except Exception as e:
+                self.log_message(f"Failed to create destination directory: {e}", logging.WARNING)
     
     def update_log_display(self):
         """
@@ -671,7 +743,11 @@ Tips:
         
         This method checks if monitoring is active before closing
         and prompts the user for confirmation if needed.
+        It also saves current settings before exiting.
         """
+        # Always save settings before closing
+        self.save_settings()
+        
         if self.monitoring:
             if messagebox.askyesno("Confirm Exit", "File monitoring is active. Do you want to exit anyway?"):
                 self.stop_monitoring()

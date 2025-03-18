@@ -171,7 +171,7 @@ class FileActivityTracker:
         self.check_thread.daemon = True
         self.check_thread.start()
         
-        logging.info(f"Started file activity tracking in {self.root_dir}")
+        logging.info(f"Started file activity tracking in {os.path.normpath(self.root_dir)}")
     
     def stop(self):
         """
