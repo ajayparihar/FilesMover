@@ -1,3 +1,17 @@
+"""
+FilesMover - Setup and Installation Script
+
+This script handles the setup and installation of the FilesMover application.
+It installs required packages, creates application directories, and optionally
+creates a desktop shortcut.
+
+Functions:
+    install_packages: Install required packages from requirements.txt
+    create_desktop_shortcut: Create a desktop shortcut for the application
+    create_app_data_directory: Create directories for logs and settings
+    run_setup: Run the complete setup process
+"""
+
 import subprocess
 import sys
 import os
@@ -6,6 +20,9 @@ import platform
 def install_packages():
     """
     Install required packages from requirements.txt
+    
+    This function uses pip to install all packages listed in the requirements.txt
+    file, which are necessary for the application to run.
     
     Returns:
         bool: True if installation was successful, False otherwise
@@ -17,7 +34,16 @@ def install_packages():
         return False
 
 def create_desktop_shortcut():
-    """Create a desktop shortcut to run the application"""
+    """
+    Create a desktop shortcut to run the application
+    
+    This function creates a platform-specific shortcut on the user's desktop
+    that can be used to launch the application. On Windows, it creates a .lnk file,
+    and on Linux/macOS, it creates a shell script.
+    
+    Returns:
+        bool: True if the shortcut was created successfully, False otherwise
+    """
     try:
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -49,7 +75,15 @@ def create_desktop_shortcut():
         return False
 
 def create_app_data_directory():
-    """Create application data directory for logs and settings"""
+    """
+    Create application data directory for logs and settings
+    
+    This function creates the necessary directories for storing application
+    logs and settings in the user's home directory.
+    
+    Returns:
+        bool: True if the directories were created successfully, False otherwise
+    """
     try:
         app_data_dir = os.path.join(os.path.expanduser("~"), ".file_mover")
         logs_dir = os.path.join(app_data_dir, "logs")
@@ -65,7 +99,13 @@ def create_app_data_directory():
         return False
 
 def run_setup():
-    """Run the setup process"""
+    """
+    Run the setup process
+    
+    This function orchestrates the complete setup process, including
+    installing packages, creating application directories, and optionally
+    creating a desktop shortcut based on user input.
+    """
     print("="*50)
     print("FilesMover - Setup")
     print("="*50)

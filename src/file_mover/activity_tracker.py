@@ -2,7 +2,13 @@
 Activity tracking and file organization based on access patterns.
 
 This module provides functionality to track file activity and organize files
-based on how frequently they are accessed.
+based on how frequently they are accessed. Files that haven't been accessed
+for a specified period can be automatically moved to an "inactive" folder,
+and will be restored when accessed again.
+
+Classes:
+    FileActivityEventHandler: Event handler for tracking file activity events
+    FileActivityTracker: Main class for tracking file activity and organizing files
 """
 
 import os
@@ -12,7 +18,7 @@ import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Default configuration
+# Default configuration values
 DEFAULT_INACTIVE_FOLDER = "_inactive_files"
 DEFAULT_INACTIVITY_THRESHOLD = 7 * 24 * 60 * 60  # 7 days in seconds
 DEFAULT_CHECK_INTERVAL = 3600  # 1 hour in seconds
@@ -20,12 +26,36 @@ DEFAULT_IGNORED_DIRS = ["_inactive_files", ".git", "__pycache__", ".venv"]
 DEFAULT_IGNORED_FILES = [".gitignore", ".DS_Store", "desktop.ini", "Thumbs.db"]
 
 class FileActivityEventHandler(FileSystemEventHandler):
-    """Event handler for file system events to track file activity."""
+    """
+    Event handler for file system events to track file activity.
+    
+    This class extends watchdog's FileSystemEventHandler to detect and record
+    file access events, and to restore inactive files when they are accessed.
+    
+    Attributes:
+        tracker (FileActivityTracker): The activity tracker instance
+    """
     
     def __init__(self, tracker):
+        """
+        Initialize the file activity event handler.
+        
+        Args:
+            tracker (FileActivityTracker): The activity tracker that will process events
+        """
         self.tracker = tracker
         
     def on_any_event(self, event):
+        """
+        Handle any file system event by updating file activity.
+        
+        This method is called for any file system event (create, modify, delete, move).
+        It updates the activity timestamp for the file and restores files from
+        the inactive folder if they are accessed.
+        
+        Args:
+            event (FileSystemEvent): The file system event object
+        """
         # Skip directory events and events in ignored directories
         if event.is_directory:
             return
@@ -53,8 +83,24 @@ class FileActivityEventHandler(FileSystemEventHandler):
 class FileActivityTracker:
     """
     Tracks file activity and moves files based on interaction patterns.
-    Files that haven't been accessed for a specified period are moved to the inactive folder.
-    When an inactive file is accessed, it's moved back to the root directory.
+    
+    This class monitors file access patterns and organizes files based on activity:
+    - Files that haven't been accessed for a specified period are moved to an inactive folder
+    - When an inactive file is accessed, it's moved back to its original location
+    
+    Attributes:
+        root_dir (str): Root directory to monitor
+        inactive_folder (str): Name of the folder for inactive files
+        inactive_path (str): Full path to the inactive folder
+        inactivity_threshold (int): Time threshold in seconds for inactivity
+        check_interval (int): Interval in seconds to check for inactive files
+        ignored_dirs (list): List of directory names to ignore
+        ignored_files (list): List of file names to ignore
+        activity_data (dict): Dictionary mapping filepaths to last activity timestamps
+        observer (Observer): File system observer for monitoring changes
+        event_handler (FileActivityEventHandler): Handler for file system events
+        check_thread (Thread): Thread for periodically checking inactive files
+        running (bool): Flag indicating whether the tracker is running
     """
     def __init__(self, 
                  root_dir, 
@@ -67,12 +113,12 @@ class FileActivityTracker:
         Initialize the file activity tracker.
         
         Args:
-            root_dir: Root directory to monitor
-            inactive_folder: Name of the folder for inactive files
-            inactivity_threshold: Time threshold in seconds for inactivity
-            check_interval: Interval in seconds to check for inactive files
-            ignored_dirs: List of directory names to ignore
-            ignored_files: List of file names to ignore
+            root_dir (str): Root directory to monitor
+            inactive_folder (str): Name of the folder for inactive files (default: "_inactive_files")
+            inactivity_threshold (int): Time threshold in seconds for inactivity (default: 7 days)
+            check_interval (int): Interval in seconds to check for inactive files (default: 1 hour)
+            ignored_dirs (list): List of directory names to ignore (default: [])
+            ignored_files (list): List of file names to ignore (default: [])
         """
         self.root_dir = os.path.abspath(root_dir)
         self.inactive_folder = inactive_folder
@@ -107,7 +153,12 @@ class FileActivityTracker:
         self._initialize_activity_data()
         
     def start(self):
-        """Start monitoring file activity and checking for inactive files."""
+        """
+        Start monitoring file activity and checking for inactive files.
+        
+        This method initializes and starts the file system observer to monitor file access,
+        and starts a background thread to periodically check for inactive files.
+        """
         # Start the observer for file system events
         self.event_handler = FileActivityEventHandler(self)
         self.observer = Observer()
@@ -123,7 +174,12 @@ class FileActivityTracker:
         logging.info(f"Started file activity tracking in {self.root_dir}")
     
     def stop(self):
-        """Stop monitoring file activity."""
+        """
+        Stop monitoring file activity.
+        
+        This method stops the file system observer and the background thread
+        for checking inactive files.
+        """
         self.running = False
         
         if self.observer:
@@ -136,7 +192,12 @@ class FileActivityTracker:
         logging.info("Stopped file activity tracking")
     
     def _initialize_activity_data(self):
-        """Initialize activity data from existing files."""
+        """
+        Initialize activity data from existing files.
+        
+        This method scans the root directory and initializes the activity timestamp
+        for each file to the current time.
+        """
         current_time = time.time()
         
         # Walk through the root directory
@@ -151,18 +212,33 @@ class FileActivityTracker:
                     self.activity_data[filepath] = current_time
     
     def _update_file_activity(self, filepath):
-        """Update the last activity time for a file."""
+        """
+        Update the last activity time for a file.
+        
+        Args:
+            filepath (str): Path to the file being accessed
+        """
         self.activity_data[filepath] = time.time()
         logging.debug(f"Updated activity for {filepath}")
     
     def _schedule_inactivity_check(self):
-        """Schedule periodic checks for inactive files."""
+        """
+        Schedule periodic checks for inactive files.
+        
+        This method runs in a separate thread and periodically checks
+        for inactive files that should be moved.
+        """
         while self.running:
             self._check_inactive_files()
             time.sleep(self.check_interval)
     
     def _check_inactive_files(self):
-        """Check for inactive files and move them accordingly."""
+        """
+        Check for inactive files and move them accordingly.
+        
+        This method checks both the root directory for files that have become inactive,
+        and the inactive directory for files that have been accessed recently.
+        """
         current_time = time.time()
         
         # Check files in the root directory
@@ -172,7 +248,16 @@ class FileActivityTracker:
         self._check_inactive_files_for_activity(current_time)
     
     def _check_root_files(self, current_time):
-        """Check files in the root directory and move inactive ones."""
+        """
+        Check files in the root directory and move inactive ones.
+        
+        This method identifies files in the root directory that haven't been
+        accessed for the specified inactivity threshold and moves them to
+        the inactive folder.
+        
+        Args:
+            current_time (float): Current timestamp for comparison
+        """
         inactive_files = []
         
         # Find inactive files
@@ -193,7 +278,15 @@ class FileActivityTracker:
             self._move_to_inactive(filepath)
     
     def _check_inactive_files_for_activity(self, current_time):
-        """Check if any inactive files have been recently accessed."""
+        """
+        Check if any inactive files have been recently accessed.
+        
+        This method identifies files in the inactive folder that have been
+        accessed recently and restores them to their original locations.
+        
+        Args:
+            current_time (float): Current timestamp for comparison
+        """
         to_restore = []
         
         # Find files to restore
@@ -215,7 +308,15 @@ class FileActivityTracker:
             self._move_to_root(filepath, rel_path)
     
     def _move_to_inactive(self, filepath):
-        """Move a file to the inactive folder."""
+        """
+        Move a file to the inactive folder.
+        
+        This method moves a file from its current location to the same relative
+        path within the inactive folder.
+        
+        Args:
+            filepath (str): Path to the file to be moved
+        """
         try:
             # Calculate the relative path from the root directory
             rel_path = os.path.relpath(filepath, self.root_dir)
@@ -236,7 +337,16 @@ class FileActivityTracker:
             logging.error(f"Error moving file to inactive folder: {e}")
     
     def _move_to_root(self, filepath, rel_path_in_inactive):
-        """Move a file back to the root directory."""
+        """
+        Move a file back to the root directory.
+        
+        This method restores a file from the inactive folder to its original
+        location in the root directory structure.
+        
+        Args:
+            filepath (str): Path to the file in the inactive folder
+            rel_path_in_inactive (str): Relative path within the inactive folder
+        """
         try:
             # Calculate the destination path
             dest_path = os.path.join(self.root_dir, rel_path_in_inactive)

@@ -1,6 +1,18 @@
 @echo off
+:: ===================================================
+:: FilesMover - Installation Setup Script
+:: ===================================================
+:: This batch file handles the installation of the
+:: FilesMover application by:
+::  1. Checking for Python installation
+::  2. Installing required packages from requirements.txt
+::  3. Optionally creating a desktop shortcut
+::
+:: After running this script, the application will be
+:: ready to use via the run_file_mover.bat script.
+:: ===================================================
 echo ======================================================
-echo          File Mover - Installation Setup  
+echo          FilesMover - Installation Setup  
 echo ======================================================
 echo.
 

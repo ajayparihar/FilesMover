@@ -1,7 +1,15 @@
 """
-Command-line interface for the file mover utility.
+Command-line interface for the FilesMover utility.
 
-This module provides a CLI interface to use the file mover functionality.
+This module provides a CLI interface to use the file mover functionality,
+allowing users to monitor directories, process files, and configure options
+through command-line arguments.
+
+Functions:
+    parse_arguments: Parse command line arguments
+    setup_logging: Configure logging with appropriate level and output
+    handle_keyboard_interrupt: Set up signal handler for clean shutdown
+    main: Main CLI entry point function
 """
 
 import os
@@ -14,7 +22,16 @@ import sys
 from .core import FileProcessor, start_monitoring
 
 def parse_arguments():
-    """Parse command line arguments."""
+    """
+    Parse command line arguments.
+    
+    This function defines and parses the command-line arguments for the FilesMover
+    utility, including source and destination directories, processing options,
+    and logging configuration.
+    
+    Returns:
+        argparse.Namespace: Parsed command-line arguments
+    """
     parser = argparse.ArgumentParser(
         description='FilesMover - Organize and move files between directories',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -66,7 +83,21 @@ def parse_arguments():
     return parser.parse_args()
 
 def setup_logging(verbose, log_file=None):
-    """Configure logging with appropriate level and output."""
+    """
+    Configure logging with appropriate level and output.
+    
+    This function sets up the logging system with file and console handlers,
+    creating the log directory if necessary and generating a timestamped
+    log filename if one is not provided.
+    
+    Args:
+        verbose (bool): Whether to enable verbose (DEBUG) logging
+        log_file (str, optional): Custom log file path. If None, a timestamped
+                                 filename will be generated.
+    
+    Returns:
+        str: Path to the log file
+    """
     # Setup log directory
     log_dir = os.path.join(os.path.expanduser('~'), '.file_mover', 'logs')
     os.makedirs(log_dir, exist_ok=True)
@@ -90,10 +121,27 @@ def setup_logging(verbose, log_file=None):
     )
     
     logging.info(f"Logging to {log_file}")
+    return log_file
 
 def handle_keyboard_interrupt(processor):
-    """Set up signal handler for clean shutdown."""
+    """
+    Set up signal handler for clean shutdown.
+    
+    This function registers a signal handler for the SIGINT signal (Ctrl+C)
+    to ensure the file processor is properly shut down when the user
+    interrupts the program.
+    
+    Args:
+        processor (FileProcessor): The file processor instance to shut down
+    """
     def signal_handler(sig, frame):
+        """
+        Signal handler function to handle keyboard interrupts.
+        
+        Args:
+            sig: Signal number
+            frame: Current stack frame
+        """
         logging.info("Received keyboard interrupt, shutting down...")
         if processor:
             processor.stop_monitoring()
@@ -102,7 +150,16 @@ def handle_keyboard_interrupt(processor):
     signal.signal(signal.SIGINT, signal_handler)
 
 def main():
-    """Main CLI function."""
+    """
+    Main CLI function.
+    
+    This function serves as the entry point for the CLI interface, parsing
+    arguments, setting up logging, initializing the file processor, and
+    starting file processing according to the specified options.
+    
+    Returns:
+        int: Exit code (0 for success, 1 for error)
+    """
     args = parse_arguments()
     
     # Setup logging

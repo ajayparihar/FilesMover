@@ -14,6 +14,7 @@ A user-friendly tool to automatically move files from a source directory to a de
 - **Simple unified launcher** to run either GUI or CLI versions
 - **Settings persistence** to remember your preferences
 - **Automatic log file creation** for tracking all operations
+- **Comprehensive documentation** for both users and developers
 
 ## Installation
 
@@ -28,8 +29,10 @@ A user-friendly tool to automatically move files from a source directory to a de
 1. Clone or download this repository
 2. Run the install.bat file to set up the application:
    ```
-   install.bat
+   scripts\install.bat
    ```
+   
+For detailed installation instructions, see [INSTALL.md](INSTALL.md).
 
 ## Usage
 
@@ -90,14 +93,27 @@ FilesMover/
 │   └── file_mover_gui.py  # GUI entry point
 ├── run.bat                # Convenience launcher
 ├── setup.py               # Setup script
-└── requirements.txt       # Python dependencies
+├── requirements.txt       # Python dependencies
+├── INSTALL.md             # Detailed installation instructions
+└── DEVELOPER.md           # Documentation for developers
 ```
+
+For detailed developer documentation, see [DEVELOPER.md](DEVELOPER.md).
 
 ## Troubleshooting
 
 - **File permissions issues**: Ensure you have write access to both source and destination directories
 - **Python not found**: Make sure Python is installed and added to your system PATH
 - **Missing modules**: Run `pip install -r requirements.txt` to install all required dependencies
+
+## Version History
+
+- **0.2.0** - Current version with activity-based file organization and improved documentation
+- **0.1.0** - Initial release with basic file moving functionality
+
+## Author
+
+Developed by Bheb Developer
 
 ## License
 

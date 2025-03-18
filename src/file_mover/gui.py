@@ -2,6 +2,15 @@
 Graphical user interface for the FilesMover utility.
 
 This module provides a GUI interface to use the file mover functionality.
+It includes a tabbed interface with main controls, settings, and help sections.
+
+Classes:
+    QueueHandler: Custom logging handler for thread-safe logging to GUI
+    FileMoverGUI: Main GUI class for the FilesMover application
+    CreateToolTip: Utility class for creating tooltips on widgets
+
+Functions:
+    main: Entry point function to run the GUI application
 """
 
 import os
@@ -21,13 +30,33 @@ SETTINGS_FILE = os.path.join(APP_DATA_DIR, 'settings.json')
 # Queue for thread-safe logging between threads and GUI
 log_queue = queue.Queue()
 
-# Custom logging handler to redirect logs to the queue
 class QueueHandler(logging.Handler):
+    """
+    Custom logging handler to redirect logs to a queue.
+    
+    This handler enables thread-safe logging by placing log records
+    in a queue for later processing by the GUI thread.
+    
+    Attributes:
+        log_queue (Queue): Queue for storing log records
+    """
     def __init__(self, log_queue):
+        """
+        Initialize the queue handler.
+        
+        Args:
+            log_queue (Queue): Queue to store log records
+        """
         super().__init__()
         self.log_queue = log_queue
 
     def emit(self, record):
+        """
+        Place the log record in the queue.
+        
+        Args:
+            record (LogRecord): Log record to be queued
+        """
         self.log_queue.put(record)
 
 # Configure logging for GUI
@@ -41,10 +70,33 @@ queue_handler = QueueHandler(log_queue)
 logging.getLogger().addHandler(queue_handler)
 
 class FileMoverGUI:
-    """Main GUI class for the FilesMover application."""
+    """
+    Main GUI class for the FilesMover application.
+    
+    This class implements the graphical user interface for the FilesMover utility,
+    providing controls for file monitoring, settings management, and activity logging.
+    
+    Attributes:
+        root (Tk): Root Tkinter window
+        source_var (StringVar): Source directory path
+        dest_var (StringVar): Destination directory path
+        status_var (StringVar): Current status message
+        file_count_var (StringVar): Count of processed files
+        activity_tracking_var (BooleanVar): Whether activity tracking is enabled
+        inactive_threshold_var (DoubleVar): Threshold in days for inactivity
+        processor (FileProcessor): The file processor instance
+        monitoring (bool): Whether file monitoring is active
+        log_text (ScrolledText): Text widget for displaying logs
+        monitor_button (Button): Button for toggling monitoring state
+    """
     
     def __init__(self, root):
-        """Initialize the GUI."""
+        """
+        Initialize the GUI.
+        
+        Args:
+            root (Tk): Root Tkinter window
+        """
         self.root = root
         self.root.title("FilesMover")
         self.root.geometry("800x600")
@@ -78,7 +130,12 @@ class FileMoverGUI:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
     
     def setup_styles(self):
-        """Create and configure ttk styles."""
+        """
+        Create and configure ttk styles for the application.
+        
+        This method sets up the visual styles for the various widgets
+        used in the application, ensuring a consistent look and feel.
+        """
         style = ttk.Style()
         
         # Main styles
@@ -94,7 +151,12 @@ class FileMoverGUI:
         style.configure("Status.TLabel", background="#e0e0e0", relief="sunken", padding=3)
     
     def create_widgets(self):
-        """Create all GUI widgets."""
+        """
+        Create all GUI widgets and arrange them in the window.
+        
+        This method sets up the main layout of the application, including
+        the tabbed interface and status bar.
+        """
         # Create main frame with padding
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -128,7 +190,12 @@ class FileMoverGUI:
         file_count_label.pack(side=tk.RIGHT, padx=5)
         
     def create_main_tab(self, parent):
-        """Create the main tab content."""
+        """
+        Create the main tab content with directory controls and log display.
+        
+        Args:
+            parent (Frame): Parent frame to contain the widgets
+        """
         # Directory frame
         dir_frame = ttk.LabelFrame(parent, text="Directories", padding="10")
         dir_frame.pack(fill=tk.X, pady=5)
@@ -187,7 +254,12 @@ class FileMoverGUI:
         save_log_button.pack(side=tk.LEFT, padx=5)
     
     def create_settings_tab(self, parent):
-        """Create the settings tab content."""
+        """
+        Create the settings tab content with configuration options.
+        
+        Args:
+            parent (Frame): Parent frame to contain the widgets
+        """
         # Activity tracking settings
         activity_frame = ttk.LabelFrame(parent, text="Activity Tracking", padding="10")
         activity_frame.pack(fill=tk.X, pady=5)
@@ -198,6 +270,13 @@ class FileMoverGUI:
             variable=self.activity_tracking_var
         )
         activity_cb.pack(anchor=tk.W, pady=5)
+        
+        # Add tooltip to the activity tracking checkbox
+        CreateToolTip(
+            activity_cb, 
+            "When enabled, files that haven't been accessed for the specified period\n"
+            "will be moved to a special folder and restored when accessed."
+        )
         
         # Threshold settings
         threshold_frame = ttk.Frame(activity_frame)
@@ -217,7 +296,12 @@ class FileMoverGUI:
         save_settings_button.pack(side=tk.RIGHT, padx=5)
     
     def create_help_tab(self, parent):
-        """Create the help tab content."""
+        """
+        Create the help tab content with usage instructions.
+        
+        Args:
+            parent (Frame): Parent frame to contain the widgets
+        """
         # Help content
         help_frame = ttk.Frame(parent, padding="10")
         help_frame.pack(fill=tk.BOTH, expand=True)
@@ -254,21 +338,36 @@ Tips:
         help_text.config(state=tk.DISABLED)
     
     def browse_source(self):
-        """Open dialog to select source directory."""
+        """
+        Open a directory selection dialog for the source directory.
+        
+        This method displays a directory browser dialog to select the
+        source directory and updates the corresponding variable.
+        """
         directory = filedialog.askdirectory(initialdir=self.source_var.get())
         if directory:
             self.source_var.set(directory)
             self.log_message(f"Source directory set to: {directory}")
     
     def browse_destination(self):
-        """Open dialog to select destination directory."""
+        """
+        Open a directory selection dialog for the destination directory.
+        
+        This method displays a directory browser dialog to select the
+        destination directory and updates the corresponding variable.
+        """
         directory = filedialog.askdirectory(initialdir=self.dest_var.get())
         if directory:
             self.dest_var.set(directory)
             self.log_message(f"Destination directory set to: {directory}")
     
     def toggle_monitoring(self):
-        """Start or stop file monitoring."""
+        """
+        Start or stop file monitoring based on current state.
+        
+        This method toggles the monitoring state, updating the button text
+        and status message accordingly.
+        """
         if self.monitoring:
             self.stop_monitoring()
             self.monitor_button.config(text="Start Monitoring")
@@ -280,7 +379,12 @@ Tips:
                 self.status_var.set("Monitoring...")
     
     def move_all_items(self):
-        """Process all files in the source directory at once."""
+        """
+        Process all files in the source directory at once.
+        
+        This method creates a FileProcessor instance to move all files
+        from the source to the destination directory in a separate thread.
+        """
         if not self.validate_directories():
             return
         
@@ -304,7 +408,12 @@ Tips:
         thread.start()
     
     def run_move_all_with_progress(self, processor):
-        """Run the move_all operation in a thread with progress updates."""
+        """
+        Run the move_all operation in a thread with progress updates.
+        
+        Args:
+            processor (FileProcessor): The file processor to use
+        """
         try:
             count = processor.process_all()
             self.update_file_count(count)
@@ -315,7 +424,15 @@ Tips:
             self.root.after(0, lambda: self.status_var.set("Error"))
     
     def validate_directories(self):
-        """Validate source and destination directories."""
+        """
+        Validate source and destination directories.
+        
+        This method checks that the source and destination directories are
+        valid and creates them if they don't exist.
+        
+        Returns:
+            bool: True if the directories are valid, False otherwise
+        """
         source = self.source_var.get()
         destination = self.dest_var.get()
         
@@ -350,7 +467,12 @@ Tips:
         return True
     
     def start_monitoring(self):
-        """Start monitoring files."""
+        """
+        Start monitoring files in the source directory.
+        
+        This method creates a FileProcessor instance and starts monitoring
+        the source directory for file changes.
+        """
         source = self.source_var.get()
         destination = self.dest_var.get()
         
@@ -380,7 +502,11 @@ Tips:
         self.log_message(f"Started monitoring {source} for changes.")
     
     def stop_monitoring(self):
-        """Stop monitoring files."""
+        """
+        Stop monitoring files in the source directory.
+        
+        This method stops the file processor and updates the monitoring state.
+        """
         if self.processor:
             self.processor.stop_monitoring()
             self.processor = None
@@ -388,22 +514,42 @@ Tips:
             self.log_message("Stopped monitoring.")
     
     def update_file_count(self, count=None):
-        """Update the file count in the status bar."""
+        """
+        Update the file count in the status bar.
+        
+        Args:
+            count (int, optional): Number of files processed
+        """
         if count is not None:
             self.file_count_var.set(f"Files: {count}")
     
     def log_message(self, message, level=logging.INFO):
-        """Log a message to both the log file and GUI."""
+        """
+        Log a message to both the log file and GUI.
+        
+        Args:
+            message (str): The message to log
+            level (int, optional): Logging level
+        """
         logging.log(level, message)
     
     def clear_log(self):
-        """Clear the log display."""
+        """
+        Clear the log display in the GUI.
+        
+        This method removes all text from the log display widget.
+        """
         self.log_text.config(state=tk.NORMAL)
         self.log_text.delete(1.0, tk.END)
         self.log_text.config(state=tk.DISABLED)
     
     def save_log(self):
-        """Save log contents to a file."""
+        """
+        Save log contents to a file.
+        
+        This method opens a file save dialog and writes the log display
+        contents to the selected file.
+        """
         file_path = filedialog.asksaveasfilename(
             defaultextension=".log",
             filetypes=[("Log files", "*.log"), ("Text files", "*.txt"), ("All files", "*.*")],
@@ -419,7 +565,12 @@ Tips:
                 messagebox.showerror("Error", f"Could not save log: {e}")
     
     def save_settings(self):
-        """Save current settings to a file."""
+        """
+        Save current settings to a file.
+        
+        This method saves the current source, destination, and activity
+        tracking settings to a JSON file for later use.
+        """
         # Ensure directory exists
         os.makedirs(APP_DATA_DIR, exist_ok=True)
         
@@ -439,7 +590,12 @@ Tips:
             self.log_message(f"Error saving settings: {e}", logging.ERROR)
     
     def load_settings(self):
-        """Load settings from a file."""
+        """
+        Load settings from a file.
+        
+        This method loads previously saved settings from a JSON file
+        and applies them to the current instance.
+        """
         if not os.path.exists(SETTINGS_FILE):
             self.log_message("No saved settings found. Using defaults.")
             return
@@ -466,7 +622,12 @@ Tips:
             self.log_message(f"Error loading settings: {e}", logging.ERROR)
     
     def update_log_display(self):
-        """Update the log display with new messages from the queue."""
+        """
+        Update the log display with new messages from the queue.
+        
+        This method processes any pending log records in the queue
+        and adds them to the log display widget.
+        """
         while True:
             try:
                 record = log_queue.get_nowait()
@@ -478,7 +639,12 @@ Tips:
         self.root.after(100, self.update_log_display)
     
     def display_log_record(self, record):
-        """Display a log record in the text widget."""
+        """
+        Display a log record in the text widget.
+        
+        Args:
+            record (LogRecord): The log record to display
+        """
         msg = self.format_log_record(record)
         
         # Update text widget
@@ -488,11 +654,24 @@ Tips:
         self.log_text.config(state=tk.DISABLED)
     
     def format_log_record(self, record):
-        """Format a log record for display."""
+        """
+        Format a log record for display.
+        
+        Args:
+            record (LogRecord): The log record to format
+            
+        Returns:
+            str: Formatted log message
+        """
         return f"{record.asctime} - {record.getMessage()}"
     
     def on_closing(self):
-        """Handle window closing event."""
+        """
+        Handle window closing event.
+        
+        This method checks if monitoring is active before closing
+        and prompts the user for confirmation if needed.
+        """
         if self.monitoring:
             if messagebox.askyesno("Confirm Exit", "File monitoring is active. Do you want to exit anyway?"):
                 self.stop_monitoring()
@@ -501,10 +680,26 @@ Tips:
             self.root.destroy()
 
 class CreateToolTip:
-    """Create a tooltip for a given widget."""
+    """
+    Create a tooltip for a given widget.
+    
+    This utility class provides a tooltip popup when hovering over
+    a widget with additional information.
+    
+    Attributes:
+        widget (Widget): The widget to attach the tooltip to
+        text (str): The tooltip text to display
+        tooltip (Toplevel): The tooltip window (when visible)
+    """
     
     def __init__(self, widget, text):
-        """Initialize the tooltip."""
+        """
+        Initialize the tooltip.
+        
+        Args:
+            widget (Widget): The widget to attach the tooltip to
+            text (str): The tooltip text to display
+        """
         self.widget = widget
         self.text = text
         self.tooltip = None
@@ -514,7 +709,12 @@ class CreateToolTip:
         self.widget.bind("<Leave>", self.leave)
     
     def enter(self, event=None):
-        """Display the tooltip."""
+        """
+        Display the tooltip when the mouse enters the widget.
+        
+        Args:
+            event (Event, optional): The mouse event
+        """
         x, y, _, _ = self.widget.bbox("insert")
         x += self.widget.winfo_rootx() + 25
         y += self.widget.winfo_rooty() + 25

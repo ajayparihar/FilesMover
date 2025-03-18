@@ -1,8 +1,16 @@
 #!/usr/bin/env python
 """
-File Mover GUI Entry Point
+FilesMover GUI Entry Point
 
-This script provides an entry point to the File Mover GUI application.
+This script provides an entry point to the FilesMover GUI application.
+It serves as a convenient way to launch the graphical user interface
+for the file mover functionality.
+
+Usage:
+    python file_mover_gui.py
+
+The script imports the main function from the file_mover.gui module 
+and calls it when executed directly.
 """
 
 import os

@@ -1,4 +1,21 @@
 @echo off
+:: ===================================================
+:: FilesMover - Main Launcher Script
+:: ===================================================
+:: This batch file launches the FilesMover application.
+:: 
+:: It can run in either GUI mode (default) or CLI mode.
+:: To run in CLI mode, use the --cli argument.
+::
+:: Arguments:
+::   --cli     : Run in command-line interface mode
+::   Any other arguments are passed to the CLI version
+::
+:: Examples:
+::   run_file_mover.bat               - Run GUI version
+::   run_file_mover.bat --cli         - Run CLI version
+::   run_file_mover.bat --cli -o      - Run CLI with one-time processing
+:: ===================================================
 echo ======================================================
 echo              FilesMover - Starting...  
 echo ======================================================
