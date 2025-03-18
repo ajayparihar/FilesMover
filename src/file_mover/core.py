@@ -2,10 +2,10 @@
 Core file processing functionality for the FilesMover utility.
 
 This module provides the core file processing capabilities for moving and organizing files.
-It includes classes for handling file system events, processing files, and monitoring directories.
+It includes classes for handling file system monitoring, processing files, and monitoring directories.
 
 Classes:
-    FileEventHandler: Handler for file system events (creation or modification)
+    DirectoryMonitor: Monitors directories for file changes
     FileProcessor: Processes and moves files between directories
 
 Functions:
@@ -17,9 +17,7 @@ import shutil
 import time
 import logging
 import datetime
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-from .activity_tracker import FileActivityTracker
+import threading
 
 # Setup log directory
 LOG_DIR = os.path.join(os.path.expanduser('~'), '.file_mover', 'logs')
@@ -40,122 +38,203 @@ logging.basicConfig(
     ]
 )
 
-class FileEventHandler(FileSystemEventHandler):
+class DirectoryMonitor:
     """
-    Handler for file system events (creation or modification).
+    Monitors a directory for changes and processes new or modified files.
     
-    This class extends watchdog's FileSystemEventHandler to process file creation
-    and modification events by delegating to a FileProcessor instance.
+    This class provides functionality to watch a directory for file system changes
+    without using external libraries. It uses a polling approach with 
+    file metadata comparison to detect changes.
     
     Attributes:
         processor (FileProcessor): The processor used to handle file operations
+        poll_interval (float): Time in seconds between directory scans
+        running (bool): Flag indicating if monitoring is active
+        _snapshot (dict): Dictionary storing file metadata for change detection
     """
     
-    def __init__(self, processor):
+    def __init__(self, processor, poll_interval=1.0):
         """
-        Initialize the event handler with a file processor.
+        Initialize the directory monitor with a file processor.
         
         Args:
             processor (FileProcessor): Instance to handle file operations
+            poll_interval (float): Time in seconds between directory scans
         """
         self.processor = processor
-        
-    def on_created(self, event):
+        self.poll_interval = poll_interval
+        self.running = False
+        self._snapshot = {}
+        self._monitor_thread = None
+    
+    def start(self):
         """
-        Handle file creation events.
+        Start monitoring the directory.
+        
+        Returns:
+            bool: True if monitoring started successfully, False otherwise
+        """
+        if self.running:
+            logging.warning("Monitoring is already running")
+            return False
+        
+        try:
+            # Take initial snapshot
+            self._snapshot = self._take_snapshot(self.processor.source)
+            
+            # Process any existing files first if configured
+            if self.processor.process_existing:
+                self.processor.process_all()
+            
+            # Start monitoring thread
+            self.running = True
+            self._monitor_thread = threading.Thread(target=self._monitor, daemon=True)
+            self._monitor_thread.start()
+            logging.info(f"Started monitoring directory: {self.processor.source}")
+            return True
+        except Exception as e:
+            logging.error(f"Failed to start monitoring: {e}")
+            self.running = False
+            return False
+    
+    def stop(self):
+        """
+        Stop monitoring the directory.
+        
+        Returns:
+            bool: True if monitoring stopped successfully, False otherwise
+        """
+        if not self.running:
+            logging.warning("Monitoring is not running")
+            return False
+        
+        self.running = False
+        if self._monitor_thread:
+            self._monitor_thread.join(timeout=3.0)
+        logging.info("Stopped monitoring directory")
+        return True
+    
+    def _take_snapshot(self, directory):
+        """
+        Take a snapshot of the directory contents.
         
         Args:
-            event (FileSystemEvent): The file system event object
+            directory (str): Path to the directory to scan
+            
+        Returns:
+            dict: Dictionary mapping file paths to their metadata
         """
-        self._process_event(event)
+        snapshot = {}
+        try:
+            for root, dirs, files in os.walk(directory) if self.processor.recursive else [(directory, [], [f.name for f in os.scandir(directory) if f.is_file()])]:
+                for filename in files:
+                    filepath = os.path.join(root, filename)
+                    try:
+                        stat = os.stat(filepath)
+                        # Store mtime and size for change detection
+                        snapshot[filepath] = {
+                            'mtime': stat.st_mtime,
+                            'size': stat.st_size
+                        }
+                    except (FileNotFoundError, PermissionError):
+                        # Skip files that can't be accessed
+                        pass
+        except Exception as e:
+            logging.error(f"Error taking directory snapshot: {e}")
         
-    def on_modified(self, event):
+        return snapshot
+    
+    def _monitor(self):
         """
-        Handle file modification events.
+        Monitor the directory for changes.
         
-        Args:
-            event (FileSystemEvent): The file system event object
+        This method runs in a separate thread and periodically compares
+        directory snapshots to detect changes.
         """
-        self._process_event(event)
-        
-    def _process_event(self, event):
-        """
-        Process file system events by delegating to the file processor.
-        
-        Args:
-            event (FileSystemEvent): The file system event object
-        """
-        # Handle directory and file events differently
-        if event.is_directory:
-            self.processor.process_directory(event.src_path)
-        else:
-            self.processor.process_file(event.src_path)
-
+        while self.running:
+            try:
+                new_snapshot = self._take_snapshot(self.processor.source)
+                
+                # Find new or modified files
+                for filepath, metadata in new_snapshot.items():
+                    # File is new
+                    if filepath not in self._snapshot:
+                        logging.debug(f"New file detected: {filepath}")
+                        if not os.path.isdir(filepath):
+                            self.processor.process_file(filepath)
+                        else:
+                            self.processor.process_directory(filepath)
+                    # File is modified (mtime or size changed)
+                    elif (metadata['mtime'] > self._snapshot[filepath]['mtime'] or 
+                          metadata['size'] != self._snapshot[filepath]['size']):
+                        logging.debug(f"Modified file detected: {filepath}")
+                        if not os.path.isdir(filepath):
+                            self.processor.process_file(filepath)
+                
+                # Update snapshot
+                self._snapshot = new_snapshot
+                
+                # Sleep until next poll
+                time.sleep(self.poll_interval)
+            except Exception as e:
+                logging.error(f"Error during directory monitoring: {e}")
+                time.sleep(self.poll_interval)  # Sleep and try again
 
 class FileProcessor:
     """
     Processes and moves files between directories.
     
-    This class is responsible for moving files from a source directory to a
-    destination directory, either in response to file system events or as a
-    one-time batch operation. It can also optionally track file activity.
+    This class provides functionality to process files according to
+    predefined rules and move them to appropriate destinations.
     
     Attributes:
-        source (str): Absolute path to the source directory
-        destination (str): Absolute path to the destination directory
-        activity_tracking (bool): Whether activity tracking is enabled
-        activity_tracker (FileActivityTracker): Tracker for file activity
-        conflict_mode (str): How to handle file conflicts ("replace", "skip", "rename")
+        source (str): Source directory path
+        destination (str): Destination directory path
+        activity_tracking (bool): Whether to track file activity
+        conflict_mode (str): How to handle file conflicts
         preserve_timestamps (bool): Whether to preserve file timestamps
         confirm_operations (bool): Whether to confirm destructive operations
-        recursive (bool): Whether to monitor subdirectories
-        processing_delay (float): Delay in seconds before processing new files
-        observer (Observer): File system observer for monitoring changes
-        event_handler (FileEventHandler): Handler for file system events
+        recursive (bool): Whether to process subdirectories
+        processing_delay (float): Delay in seconds before processing files
+        process_existing (bool): Whether to process existing files on startup
     """
     
     def __init__(self, source, destination, activity_tracking=False, 
-                 inactive_folder="_inactive_files", inactivity_threshold=7*24*60*60,
-                 conflict_mode="replace", preserve_timestamps=True, 
-                 confirm_operations=True, recursive=False, processing_delay=0.5):
+                 conflict_mode="rename", preserve_timestamps=True, 
+                 confirm_operations=False, recursive=True, 
+                 processing_delay=0.0, process_existing=True):
         """
-        Initialize the file processor.
+        Initialize the file processor with the given parameters.
         
         Args:
             source (str): Source directory path
             destination (str): Destination directory path
-            activity_tracking (bool): Whether to enable activity tracking
-            inactive_folder (str): Name of the folder for inactive files
-            inactivity_threshold (int): Time threshold in seconds for inactivity (default: 7 days)
-            conflict_mode (str): How to handle file conflicts ("replace", "skip", "rename")
-            preserve_timestamps (bool): Whether to preserve file timestamps
-            confirm_operations (bool): Whether to confirm destructive operations
-            recursive (bool): Whether to monitor subdirectories
-            processing_delay (float): Delay in seconds before processing new files
+            activity_tracking (bool, optional): Whether to track file activity
+            conflict_mode (str, optional): How to handle file conflicts
+            preserve_timestamps (bool, optional): Whether to preserve file timestamps
+            confirm_operations (bool, optional): Whether to confirm destructive operations
+            recursive (bool, optional): Whether to process subdirectories
+            processing_delay (float, optional): Delay in seconds before processing files
+            process_existing (bool, optional): Whether to process existing files on startup
         """
         self.source = os.path.abspath(source)
         self.destination = os.path.abspath(destination)
         self.activity_tracking = activity_tracking
-        self.activity_tracker = None
-        
-        # New settings
         self.conflict_mode = conflict_mode
         self.preserve_timestamps = preserve_timestamps
         self.confirm_operations = confirm_operations
         self.recursive = recursive
         self.processing_delay = processing_delay
+        self.process_existing = process_existing
         
-        # Initialize observer and handler
-        self.observer = None
-        self.event_handler = None
+        # Create destination if it doesn't exist
+        os.makedirs(self.destination, exist_ok=True)
         
-        # Initialize activity tracker if enabled
-        if activity_tracking:
-            self.activity_tracker = FileActivityTracker(
-                root_dir=source,
-                inactive_folder=inactive_folder,
-                inactivity_threshold=inactivity_threshold
-            )
+        # Validate paths
+        if not os.path.isdir(self.source):
+            raise ValueError(f"Source directory does not exist: {self.source}")
+        if not os.path.isdir(self.destination):
+            raise ValueError(f"Destination directory could not be created: {self.destination}")
     
     def process_file(self, src_path):
         """
@@ -188,7 +267,7 @@ class FileProcessor:
         # Create destination directory if it doesn't exist
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         
-        # Handle existing file conflicts
+        # Handle file conflicts
         if os.path.exists(dest_path):
             if self.conflict_mode == "skip":
                 logging.info(f"Skipped (already exists): {rel_path}")
@@ -200,12 +279,8 @@ class FileProcessor:
                 while os.path.exists(f"{base_name}_{counter}{ext}"):
                     counter += 1
                 dest_path = f"{base_name}_{counter}{ext}"
-            elif self.conflict_mode == "replace":
-                # Ask for confirmation if enabled
-                if self.confirm_operations:
-                    # In CLI mode, log the information
-                    logging.warning(f"About to replace existing file: {rel_path}")
-                    # In GUI mode, this would be replaced with a dialog
+                logging.info(f"Renamed due to conflict: {os.path.basename(src_path)} → {os.path.basename(dest_path)}")
+            # For "replace" mode, we'll just overwrite
         
         try:
             # Store the source directory and file stats for later
@@ -281,41 +356,6 @@ class FileProcessor:
                         logging.warning(f"Could not remove empty directory {os.path.relpath(dir_path, self.source)}: {e}")
                 
         return file_count
-    
-    def start_monitoring(self):
-        """
-        Start monitoring the source directory for changes.
-        
-        This method sets up and starts a file system observer to watch for
-        file creation and modification events in the source directory.
-        It also starts the activity tracker if enabled.
-        """
-        self.event_handler = FileEventHandler(self)
-        self.observer = Observer()
-        self.observer.schedule(self.event_handler, self.source, recursive=self.recursive)
-        self.observer.start()
-        
-        # Start activity tracker if enabled
-        if self.activity_tracking and self.activity_tracker:
-            self.activity_tracker.start()
-            
-        logging.info(f"Started monitoring {os.path.normpath(self.source)} {'(including subdirectories)' if self.recursive else ''}")
-    
-    def stop_monitoring(self):
-        """
-        Stop monitoring the source directory.
-        
-        This method stops the file system observer and activity tracker
-        if they are running.
-        """
-        if self.observer:
-            self.observer.stop()
-            self.observer.join()
-            
-        if self.activity_tracking and self.activity_tracker:
-            self.activity_tracker.stop()
-            
-        logging.info(f"Stopped monitoring {os.path.normpath(self.source)}")
 
     def process_directory(self, src_dir):
         """
@@ -349,44 +389,55 @@ class FileProcessor:
             logging.error(f"Error creating directory {rel_path}: {e}")
             return False
 
-
 def start_monitoring(source, destination, activity_tracking=False, 
-                    inactive_folder="_inactive_files", inactivity_threshold=7*24*60*60,
-                    conflict_mode="replace", preserve_timestamps=True, 
-                    confirm_operations=True, recursive=False, processing_delay=0.5):
+                   conflict_mode="rename", preserve_timestamps=True, 
+                   confirm_operations=False, recursive=True,
+                   processing_delay=0.0, poll_interval=1.0,
+                   process_existing=True):
     """
     Start monitoring a directory for changes.
     
-    This convenience function creates a FileProcessor and starts monitoring
-    the specified directory. It provides a simpler interface for common usage.
+    This is a convenience function to create a FileProcessor and DirectoryMonitor
+    instance and start monitoring in one step.
     
     Args:
         source (str): Source directory path
         destination (str): Destination directory path
-        activity_tracking (bool): Whether to enable activity tracking
-        inactive_folder (str): Name of the folder for inactive files
-        inactivity_threshold (int): Time threshold in seconds for inactivity (default: 7 days)
-        conflict_mode (str): How to handle file conflicts ("replace", "skip", "rename")
-        preserve_timestamps (bool): Whether to preserve file timestamps
-        confirm_operations (bool): Whether to confirm destructive operations
-        recursive (bool): Whether to monitor subdirectories
-        processing_delay (float): Delay in seconds before processing new files
+        activity_tracking (bool, optional): Whether to track file activity
+        conflict_mode (str, optional): How to handle file conflicts
+        preserve_timestamps (bool, optional): Whether to preserve file timestamps
+        confirm_operations (bool, optional): Whether to confirm destructive operations
+        recursive (bool, optional): Whether to process subdirectories
+        processing_delay (float, optional): Delay in seconds before processing files
+        poll_interval (float, optional): Time in seconds between directory scans
+        process_existing (bool, optional): Whether to process existing files on startup
         
     Returns:
-        FileProcessor: The processor instance that was created and started
+        tuple: (DirectoryMonitor instance, FileProcessor instance) if successful,
+               None if there was an error
     """
-    processor = FileProcessor(
-        source=source,
-        destination=destination,
-        activity_tracking=activity_tracking,
-        inactive_folder=inactive_folder,
-        inactivity_threshold=inactivity_threshold,
-        conflict_mode=conflict_mode,
-        preserve_timestamps=preserve_timestamps,
-        confirm_operations=confirm_operations,
-        recursive=recursive,
-        processing_delay=processing_delay
-    )
-    
-    processor.start_monitoring()
-    return processor 
+    try:
+        processor = FileProcessor(
+            source=source,
+            destination=destination,
+            activity_tracking=activity_tracking,
+            conflict_mode=conflict_mode,
+            preserve_timestamps=preserve_timestamps,
+            confirm_operations=confirm_operations,
+            recursive=recursive,
+            processing_delay=processing_delay,
+            process_existing=process_existing
+        )
+        
+        monitor = DirectoryMonitor(
+            processor=processor,
+            poll_interval=poll_interval
+        )
+        
+        if monitor.start():
+            return monitor, processor
+        else:
+            return None
+    except Exception as e:
+        logging.error(f"Error starting monitoring: {e}")
+        return None 

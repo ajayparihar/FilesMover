@@ -45,7 +45,6 @@ A user-friendly tool to automatically monitor and move files from a source direc
 #### Prerequisites
 - Python 3.6 or higher
 - Required Python libraries:
-  - watchdog (for file system monitoring)
   - tkinter (for GUI, included with Python)
 
 #### Setup Instructions
@@ -272,7 +271,7 @@ FilesMover follows a modular design with clear separation of concerns:
 
 1. **Core Technologies**:
    - Python 3.6+: Main programming language
-   - watchdog: File system monitoring
+   - Custom polling: File system monitoring without dependencies
    - tkinter: GUI framework
    - threading: Concurrent operations
    - logging: Application logging

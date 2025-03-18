@@ -17,16 +17,17 @@ Modules:
 
 Classes:
     FileProcessor: Main class for processing and moving files
+    DirectoryMonitor: Monitors directories for file changes
     FileActivityTracker: Tracks file activity and moves files based on usage
     
 Functions:
     start_monitoring: Convenience function to start monitoring a directory
 """
 
-from .core import FileProcessor, start_monitoring
+from .core import FileProcessor, DirectoryMonitor, start_monitoring
 from .activity_tracker import FileActivityTracker
 
-__all__ = ['FileProcessor', 'start_monitoring', 'FileActivityTracker']
+__all__ = ['FileProcessor', 'DirectoryMonitor', 'start_monitoring', 'FileActivityTracker']
 
 # Package version information
 __version__ = "0.2.0"

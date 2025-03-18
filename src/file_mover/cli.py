@@ -19,7 +19,7 @@ import logging
 import datetime
 import signal
 import sys
-from .core import FileProcessor, start_monitoring
+from .core import FileProcessor, DirectoryMonitor, start_monitoring
 
 def parse_arguments():
     """
@@ -105,6 +105,13 @@ def parse_arguments():
         default=0.5
     )
     
+    parser.add_argument(
+        '--poll-interval',
+        help='Interval in seconds between directory scans',
+        type=float,
+        default=1.0
+    )
+    
     # Logging options
     parser.add_argument(
         '--verbose',
@@ -161,16 +168,17 @@ def setup_logging(verbose, log_file=None):
     logging.info(f"Logging to {log_file}")
     return log_file
 
-def handle_keyboard_interrupt(processor):
+def handle_keyboard_interrupt(monitor, processor):
     """
     Set up signal handler for clean shutdown.
     
     This function registers a signal handler for the SIGINT signal (Ctrl+C)
-    to ensure the file processor is properly shut down when the user
+    to ensure the directory monitor is properly shut down when the user
     interrupts the program.
     
     Args:
-        processor (FileProcessor): The file processor instance to shut down
+        monitor (DirectoryMonitor): The directory monitor instance to shut down
+        processor (FileProcessor): The file processor instance
     """
     def signal_handler(sig, frame):
         """
@@ -181,8 +189,8 @@ def handle_keyboard_interrupt(processor):
             frame: Current stack frame
         """
         logging.info("Received keyboard interrupt, shutting down...")
-        if processor:
-            processor.stop_monitoring()
+        if monitor:
+            monitor.stop()
         sys.exit(0)
     
     signal.signal(signal.SIGINT, signal_handler)
@@ -232,29 +240,37 @@ def main():
         preserve_timestamps=args.preserve_timestamps,
         confirm_operations=args.confirm_operations,
         recursive=args.recursive,
-        processing_delay=args.processing_delay
+        processing_delay=args.processing_delay,
+        process_existing=not args.one_time
     )
-    
-    # Set up keyboard interrupt handler
-    handle_keyboard_interrupt(processor)
     
     if args.one_time:
         # Process all files once
         logging.info(f"Processing all files from {os.path.normpath(source)} to {os.path.normpath(destination)}...")
         file_count = processor.process_all()
         logging.info(f"Processed {file_count} files.")
+        return 0
     else:
         # Start monitoring
         logging.info(f"Starting file monitoring from {os.path.normpath(source)} to {os.path.normpath(destination)}...")
-        processor.start_monitoring()
+        monitor = DirectoryMonitor(processor, poll_interval=args.poll_interval)
         
-        try:
-            # Keep the main thread running
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logging.info("Interrupted by user.")
-            processor.stop_monitoring()
+        # Set up keyboard interrupt handler
+        handle_keyboard_interrupt(monitor, processor)
+        
+        # Start monitoring and enter main loop
+        if monitor.start():
+            try:
+                # Keep the main thread alive
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                monitor.stop()
+                logging.info("Monitoring stopped.")
+            return 0
+        else:
+            logging.error("Failed to start monitoring.")
+            return 1
     
     return 0
 

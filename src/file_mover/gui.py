@@ -21,7 +21,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, scrolledtext, messagebox
 import queue
 import json
-from .core import FileProcessor
+from .core import FileProcessor, DirectoryMonitor
 
 # Define settings file path
 APP_DATA_DIR = os.path.join(os.path.expanduser('~'), '.file_mover')
@@ -608,13 +608,12 @@ Tips:
         """
         Start monitoring files in the source directory.
         
-        This method creates a FileProcessor instance and starts monitoring
-        the source directory for file changes.
+        This method creates a FileProcessor and DirectoryMonitor instance and starts 
+        monitoring the source directory for file changes.
         """
         source = self.source_var.get()
         destination = self.dest_var.get()
         
-        # First move all existing files
         self.log_message("First moving all existing files before starting monitoring...")
         
         # Create the file processor
@@ -627,7 +626,8 @@ Tips:
                 preserve_timestamps=self.preserve_timestamps_var.get(),
                 confirm_operations=self.confirm_deletions_var.get(),
                 recursive=self.recursive_monitoring_var.get(),
-                processing_delay=self.processing_delay_var.get()
+                processing_delay=self.processing_delay_var.get(),
+                process_existing=True
             )
         except Exception as e:
             logging.error(f"Failed to initialize FileProcessor: {e}")
@@ -642,21 +642,33 @@ Tips:
         except Exception as e:
             self.log_message(f"Error processing existing files: {e}", logging.ERROR)
         
-        # Start monitoring
-        file_processor.start_monitoring()
-        self.processor = file_processor
-        self.monitoring = True
-        
-        self.log_message(f"Started monitoring {os.path.normpath(source)} for changes.")
+        # Create and start monitor
+        try:
+            directory_monitor = DirectoryMonitor(
+                processor=file_processor,
+                poll_interval=1.0  # Default 1 second interval
+            )
+            
+            if directory_monitor.start():
+                self.monitor = directory_monitor
+                self.processor = file_processor
+                self.monitoring = True
+                
+                self.log_message(f"Started monitoring {os.path.normpath(source)} for changes.")
+            else:
+                self.log_message("Failed to start monitoring.", logging.ERROR)
+        except Exception as e:
+            self.log_message(f"Error starting monitor: {e}", logging.ERROR)
     
     def stop_monitoring(self):
         """
         Stop monitoring files in the source directory.
         
-        This method stops the file processor and updates the monitoring state.
+        This method stops the directory monitor and updates the monitoring state.
         """
-        if self.processor:
-            self.processor.stop_monitoring()
+        if self.monitor:
+            self.monitor.stop()
+            self.monitor = None
             self.processor = None
             self.monitoring = False
             self.log_message("Stopped monitoring.")
