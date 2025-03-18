@@ -16,13 +16,13 @@ if %ERRORLEVEL% neq 0 (
 
 REM Run the pip install directly for requirements.txt
 echo Installing required packages...
-python -m pip install -r requirements.txt
+python -m pip install -r ..\requirements.txt
 
 if %ERRORLEVEL% neq 0 (
     echo.
     echo WARNING: Some packages failed to install
     echo You can try installing them manually with:
-    echo pip install -r requirements.txt
+    echo pip install -r ..\requirements.txt
     echo.
 )
 
@@ -32,7 +32,7 @@ set /p create_shortcut=Would you like to create a desktop shortcut? (y/n):
 
 if /i "%create_shortcut%"=="y" (
     echo Running setup for desktop shortcut...
-    python setup.py
+    python ..\setup.py
 ) else (
     echo Skipping desktop shortcut creation.
 )

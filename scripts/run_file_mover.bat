@@ -21,13 +21,13 @@ if "%1"=="--help" goto show_help
 REM By default, run the GUI version
 :run_gui
 echo Starting File Mover GUI...
-python file_mover_gui.py
+python ..\src\file_mover_gui.py
 goto end
 
 :run_cli
 echo Starting File Mover CLI...
 REM Pass any remaining arguments to the CLI script
-python file_mover_cli.py %2 %3 %4 %5 %6 %7 %8 %9
+python ..\src\file_mover_cli.py %2 %3 %4 %5 %6 %7 %8 %9
 goto end
 
 :show_help
@@ -46,7 +46,7 @@ echo   -o, --one-time          - Process existing files and exit
 echo   -l, --log-file [path]   - Specify custom log file
 echo   --verbose               - Enable verbose logging
 echo.
-echo For full CLI help, run: python file_mover_cli.py --help
+echo For full CLI help, run: python ..\src\file_mover_cli.py --help
 echo.
 
 :end

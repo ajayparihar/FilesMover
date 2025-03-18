@@ -21,7 +21,7 @@ def create_desktop_shortcut():
     try:
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        batch_file = os.path.join(script_dir, "run_file_mover.bat")
+        batch_file = os.path.join(script_dir, "run.bat")
         
         if platform.system() == "Windows":
             # For Windows, create a shortcut (.lnk) file
@@ -40,7 +40,7 @@ def create_desktop_shortcut():
             # For Linux/Mac, create a shell script
             shortcut_path = os.path.join(desktop_path, "File Mover.sh")
             with open(shortcut_path, 'w') as f:
-                f.write(f'#!/bin/sh\ncd "{script_dir}"\npython file_mover_gui.py\n')
+                f.write(f'#!/bin/sh\ncd "{script_dir}"\npython src/file_mover_gui.py\n')
             os.chmod(shortcut_path, 0o755)  # Make executable
             return True
     except Exception as e:
@@ -97,10 +97,10 @@ def main():
     
     print("\nSetup completed!")
     print("\nTo run the application:")
-    print("1. Double-click 'run_file_mover.bat' (Windows)")
+    print("1. Double-click 'run.bat' in the main directory")
     print("   OR")
-    print("2. Run 'python file_mover_gui.py' for the GUI")
-    print("3. Run 'python file_mover_cli.py --help' for CLI options")
+    print("2. Run 'python src/file_mover_gui.py' for the GUI")
+    print("3. Run 'python src/file_mover_cli.py --help' for CLI options")
     print("\nThank you for installing File Mover!")
     
     input("\nPress Enter to exit...")
