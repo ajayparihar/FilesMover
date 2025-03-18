@@ -1,2 +1,0 @@
-tk==0.1.0
-# tkinter is part of the Python standard library and doesn't need to be installed separately 

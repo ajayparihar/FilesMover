@@ -45,8 +45,7 @@ A user-friendly tool to automatically monitor and move files from a source direc
 
 #### Prerequisites
 - Python 3.6 or higher
-- Required Python libraries:
-  - tkinter (for GUI, included with Python)
+- tkinter (included with Python standard library)
 
 #### Setup Instructions
 
