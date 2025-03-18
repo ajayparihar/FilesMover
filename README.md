@@ -27,6 +27,7 @@ A user-friendly tool to automatically monitor and move files from a source direc
 
 ### Features
 
+- **Zero external dependencies** - uses only Python standard library
 - **Easy-to-use GUI** with intuitive controls and helpful tooltips
 - **Real-time file monitoring** - automatically moves files as they appear
 - **Manual processing option** - process all existing files with one click
@@ -55,19 +56,13 @@ A user-friendly tool to automatically monitor and move files from a source direc
    cd FilesMover
    ```
 
-2. **Install required dependencies** using pip:
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. **Run the install script** (Windows):
+2. **Run the install script** (Windows):
    ```
    scripts\install.bat
    ```
    
    This script will:
    - Verify Python installation
-   - Install required dependencies
    - Create necessary directories
    - Set up environment variables (if needed)
 
@@ -103,9 +98,7 @@ The graphical interface provides easy access to all features:
    - **Performance**:
      - Recursive Monitoring: Include subdirectories
      - Processing Delay: Wait time before processing new files
-   - **Activity Tracking**:
-     - Enable/disable activity-based organization
-     - Set inactive folder name and thresholds
+     - Poll Interval: Frequency of directory scans
 
 4. **Help Tab**:
    - View basic usage instructions
@@ -134,7 +127,7 @@ scripts\run_file_mover.bat --cli [options]
 
 3. **Advanced configuration**:
    ```
-   scripts\run_file_mover.bat --cli -s C:\Source -d D:\Destination -c rename -r --processing-delay 2.0
+   scripts\run_file_mover.bat --cli -s C:\Source -d D:\Destination -c rename -r --processing-delay 2.0 --poll-interval 0.5
    ```
 
 For a complete list of options, use:
@@ -170,6 +163,11 @@ scripts\run_file_mover.bat --cli --help
    - Useful for ensuring files are completely written before processing
    - Especially important for large files or network drives
 
+3. **Poll Interval**:
+   - Time in seconds between directory scans
+   - Lower values provide faster response but increase CPU usage
+   - Higher values reduce system impact but may delay file processing
+
 #### Activity Tracking Settings
 
 1. **Inactive Folder**:
@@ -186,7 +184,6 @@ scripts\run_file_mover.bat --cli --help
 
 1. **Application won't start**:
    - Ensure Python 3.6+ is installed and in your PATH
-   - Verify all dependencies are installed: `pip install -r requirements.txt`
    - Check permissions on the application directory
 
 2. **Files aren't being moved**:
@@ -203,6 +200,7 @@ scripts\run_file_mover.bat --cli --help
 4. **Performance issues**:
    - Large directories with many files may cause slowdowns
    - Consider disabling recursive monitoring if not needed
+   - Increase poll interval for less CPU usage
    - Increase processing delay for network drives
 
 #### Locating Log Files
@@ -223,8 +221,8 @@ FilesMover follows a modular design with clear separation of concerns:
 1. **Core Module** (`core.py`):
    - Contains the core file processing logic
    - Implements `FileProcessor` for moving files between directories
-   - Implements `FileEventHandler` for handling file system events
-   - Provides monitoring functionality via watchdog library
+   - Implements `DirectoryMonitor` for polling-based file change detection
+   - Provides monitoring functionality using only standard library components
 
 2. **GUI Module** (`gui.py`):
    - Implements the graphical interface using tkinter
@@ -250,10 +248,11 @@ FilesMover follows a modular design with clear separation of concerns:
    - Preserves file timestamps when configured
    - Maintains directory structure during file moves
 
-2. **FileEventHandler**:
-   - Extends watchdog's `FileSystemEventHandler`
-   - Detects file creation and modification events
-   - Delegates to `FileProcessor` for handling files
+2. **DirectoryMonitor**:
+   - Custom implementation of file system monitoring
+   - Uses polling with file metadata comparison to detect changes
+   - No external dependencies required
+   - Configurable poll interval
 
 3. **FileMoverGUI**:
    - Manages the tkinter interface
@@ -272,7 +271,7 @@ FilesMover follows a modular design with clear separation of concerns:
 1. **Core Technologies**:
    - Python 3.6+: Main programming language
    - Custom polling: File system monitoring without dependencies
-   - tkinter: GUI framework
+   - tkinter: GUI framework (part of Python standard library)
    - threading: Concurrent operations
    - logging: Application logging
 
@@ -299,7 +298,7 @@ FilesMover/
 │   ├── file_mover_cli.py  # CLI entry point
 │   └── file_mover_gui.py  # GUI entry point
 ├── run.bat                # Convenience launcher for main app
-├── requirements.txt       # Python dependencies
+├── requirements.txt       # Python dependencies (minimal)
 ├── README.md              # This documentation file
 └── LICENSE                # License information
 ```
@@ -344,7 +343,8 @@ FilesMover/
 
 ### Version History
 
-- **0.2.0** - Current version with activity-based file organization and improved documentation
+- **0.3.0** - Removed external dependencies for file monitoring, improved performance
+- **0.2.0** - Added activity-based file organization and improved documentation
 - **0.1.0** - Initial release with basic file moving functionality
 
 ### License
@@ -354,5 +354,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ### Acknowledgments
 
 - Built with Python and Tkinter
-- Uses the watchdog library for file system monitoring
+- Designed to work with zero external dependencies
 - Thanks to all contributors and users for feedback and suggestions
