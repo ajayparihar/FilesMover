@@ -1,95 +1,58 @@
 # FilesMover
 
-A user-friendly tool to automatically monitor and move files from a source directory to a destination directory in real-time. The application provides both a graphical user interface (GUI) and command-line interface (CLI) for flexibility.
+A simple tool to automatically monitor and move files from a source directory to a destination directory in real-time. The application provides both a graphical user interface (GUI) and command-line interface (CLI).
 
-## Table of Contents
+## Features
 
-- [User Guide](#user-guide)
-  - [Features](#features)
-  - [Installation](#installation)
-  - [Getting Started](#getting-started)
-  - [Using the GUI](#using-the-gui)
-  - [Using the Command Line](#using-the-command-line)
-  - [Configuration Options](#configuration-options)
-  - [Troubleshooting](#troubleshooting)
-- [Developer Guide](#developer-guide)
-  - [Architecture Overview](#architecture-overview)
-  - [Core Components](#core-components)
-  - [Technology Stack](#technology-stack)
-  - [Code Structure](#code-structure)
-  - [Development Guidelines](#development-guidelines)
-- [Additional Information](#additional-information)
-  - [Version History](#version-history)
-  - [License](#license)
-  - [Acknowledgments](#acknowledgments)
-
-## User Guide
-
-### Features
-
-- **Zero external dependencies** - uses only Python standard library
-- **Easy-to-use GUI** with intuitive controls and helpful tooltips
 - **Real-time file monitoring** - automatically moves files as they appear
+- **Easy-to-use GUI** with intuitive controls
 - **Manual processing option** - process all existing files with one click
 - **Directory structure preservation** - maintains folder structure when moving files
-- **Advanced file conflict handling** - options to replace, skip, or rename files
+- **File conflict handling** - options to replace, skip, or rename files
 - **File timestamp preservation** - maintains original file timestamps when moving
-- **File deletion confirmation** - provides protection for important destination files
 - **Recursive monitoring** - option to monitor subdirectories
 - **Processing delay control** - prevents processing incomplete files
-- **Detailed activity logging** with status messages
-- **Activity-based file organization** - automatically manages files based on usage patterns
-- **Settings persistence** to remember your preferences
+- **Detailed activity logging**
 
-### Installation
+## Installation
 
-#### Prerequisites
-- Python 3.6 or higher
+### Prerequisites
+- Python 3.7 or higher
 - tkinter (included with Python standard library)
 
-#### Setup Instructions
+### Setup Instructions
 
-1. **Clone or download this repository** to your local machine
-   ```
-   git clone https://github.com/yourusername/FilesMover.git
-   cd FilesMover
-   ```
-
-2. **Run the install script** (Windows):
+1. Clone the repository or download the source code
+2. Run the installation script:
    ```
    scripts\install.bat
    ```
    
-   This script will:
-   - Verify Python installation
-   - Create necessary directories
-   - Set up environment variables (if needed)
+   Or install manually:
+   ```
+   pip install .
+   ```
 
-### Getting Started
+## Using the Application
 
-The simplest way to get started with FilesMover is:
+### Quick Start
 
-1. Launch the application by double-clicking `run.bat`
-2. Set your source and destination folders using the "Browse" buttons
-3. Click "Start Monitoring" to begin automatically moving files
-4. Any new files added to your source folder will be moved to the destination folder
+1. Double-click `run.bat` to launch the GUI
+2. Select source and destination directories
+3. Click "Start Monitoring" to begin automatic file movement
+4. Use "Process All Files" to immediately move existing files
 
-### Using the GUI
+### GUI Interface
 
 The graphical interface provides easy access to all features:
 
-1. **Launch the application** by double-clicking `run.bat` or using:
-   ```
-   scripts\run_file_mover.bat
-   ```
-
-2. **Main Controls Tab**:
+1. **Main Controls Tab**:
    - Set source and destination directories using the browse buttons
    - Start/Stop monitoring with the toggle button
    - Use "Move All Files" to process existing files immediately
    - View real-time activity in the log section
 
-3. **Settings Tab**:
+2. **Settings Tab**:
    - **File Handling**:
      - Conflict Mode: Choose how to handle duplicate files
      - Preserve Timestamps: Keep original file dates
@@ -99,44 +62,39 @@ The graphical interface provides easy access to all features:
      - Processing Delay: Wait time before processing new files
      - Poll Interval: Frequency of directory scans
 
-4. **Help Tab**:
-   - View basic usage instructions
-   - Find troubleshooting tips
-   - Access additional resources
+### Command Line Usage
 
-### Using the Command Line
-
-For automation and scripting, the command-line interface offers all the same functionality:
+For automation and scripting, use the command-line interface:
 
 ```
-scripts\run_file_mover.bat --cli [options]
+run.bat --cli [options]
 ```
 
-#### Basic CLI Examples:
+#### CLI Examples:
 
 1. **Simple monitoring** with default settings:
    ```
-   scripts\run_file_mover.bat --cli -s C:\Source -d D:\Destination
+   run.bat --cli -s C:\Source -d D:\Destination
    ```
 
 2. **One-time processing** (move all files and exit):
    ```
-   scripts\run_file_mover.bat --cli -s C:\Source -d D:\Destination --one-time
+   run.bat --cli -s C:\Source -d D:\Destination --one-time
    ```
 
 3. **Advanced configuration**:
    ```
-   scripts\run_file_mover.bat --cli -s C:\Source -d D:\Destination -c rename -r --processing-delay 2.0 --poll-interval 0.5
+   run.bat --cli -s C:\Source -d D:\Destination -c rename -r --processing-delay 2.0 --poll-interval 0.5
    ```
 
 For a complete list of options, use:
 ```
-scripts\run_file_mover.bat --cli --help
+run.bat --cli --help
 ```
 
-### Configuration Options
+## Configuration Options
 
-#### File Handling Settings
+### File Handling Settings
 
 1. **Conflict Handling**:
    - **Replace**: Overwrite existing files in the destination (default)
@@ -144,214 +102,38 @@ scripts\run_file_mover.bat --cli --help
    - **Rename**: Add a number suffix to new files to avoid conflicts (file.txt → file_1.txt)
 
 2. **Preserve Timestamps**: 
-   - When enabled, moved files maintain their original creation, modification, and access times
-   - When disabled, files get new timestamps when moved
+   - When enabled, moved files maintain their original creation and modification times
 
 3. **Confirm Operations**:
-   - When enabled, you'll be asked to confirm before any file is deleted or replaced
-   - When disabled, operations proceed automatically without confirmation
+   - When enabled, you'll be asked to confirm before replacing files
 
-#### Performance Settings
+### Performance Settings
 
 1. **Recursive Monitoring**:
    - When enabled, all subdirectories within the source directory will be monitored
-   - When disabled, only the top-level source directory is monitored
 
 2. **Processing Delay**:
    - Adds a delay (in seconds) before processing newly detected files
    - Useful for ensuring files are completely written before processing
-   - Especially important for large files or network drives
 
 3. **Poll Interval**:
    - Time in seconds between directory scans
    - Lower values provide faster response but increase CPU usage
-   - Higher values reduce system impact but may delay file processing
 
-#### Activity Tracking Settings
+## Troubleshooting
 
-1. **Inactive Folder**:
-   - Folder name for storing inactive files (default: "_inactive_files")
-   - Created as a subdirectory of the destination directory
+### Common Issues
 
-2. **Inactivity Threshold**:
-   - Time (in seconds) before a file is considered inactive
-   - Default is 7 days (604,800 seconds)
-
-### Troubleshooting
-
-#### Common Problems and Solutions
-
-1. **Application won't start**:
-   - Ensure Python 3.6+ is installed and in your PATH
-   - Check permissions on the application directory
-
-2. **Files aren't being moved**:
+1. **Files aren't being moved**:
    - Verify source and destination paths are correct and accessible
    - Check that monitoring is actually started (status should say "Monitoring")
    - Ensure you have write permissions on both directories
-   - Look for error messages in the log display or log files
 
-3. **File access errors**:
+2. **File access errors**:
    - Files may be locked by another process
-   - Try increasing the processing delay to allow files to be fully written
+   - Try increasing the processing delay
    - Check for antivirus software that might be blocking operations
 
-4. **Performance issues**:
-   - Large directories with many files may cause slowdowns
-   - Consider disabling recursive monitoring if not needed
-   - Increase poll interval for less CPU usage
-   - Increase processing delay for network drives
-
-#### Locating Log Files
-
-Log files are automatically created in:
-```
-~/.file_mover/logs/file_mover_YYYYMMDD_HHMMSS.log
-```
-
-These logs contain detailed information about all operations and errors.
-
-## Developer Guide
-
-### Architecture Overview
-
-FilesMover follows a modular design with clear separation of concerns:
-
-1. **Core Module** (`core.py`):
-   - Contains the core file processing logic
-   - Implements `FileProcessor` for moving files between directories
-   - Implements `DirectoryMonitor` for polling-based file change detection
-   - Provides monitoring functionality using only standard library components
-
-2. **GUI Module** (`gui.py`):
-   - Implements the graphical interface using tkinter
-   - `FileMoverGUI` class manages the interface and user interactions
-   - Provides tabbed interface for main controls, settings, and help
-   - Implements thread-safe logging with `QueueHandler`
-
-3. **CLI Module** (`cli.py`):
-   - Provides command-line interface for the application
-   - Parses command-line arguments and configures the processor
-   - Supports one-time processing or continuous monitoring
-
-4. **Activity Tracker Module** (`activity_tracker.py`):
-   - Implements `FileActivityTracker` for tracking file access patterns
-   - Manages inactive file storage and restoration
-   - Provides thread-safe operation with the main file processor
-
-### Core Components
-
-1. **FileProcessor**:
-   - Main class responsible for file operations
-   - Handles file conflicts according to configuration
-   - Preserves file timestamps when configured
-   - Maintains directory structure during file moves
-
-2. **DirectoryMonitor**:
-   - Custom implementation of file system monitoring
-   - Uses polling with file metadata comparison to detect changes
-   - No external dependencies required
-   - Configurable poll interval
-
-3. **FileMoverGUI**:
-   - Manages the tkinter interface
-   - Implements settings persistence
-   - Provides real-time logging display
-   - Handles background processing threads
-
-4. **FileActivityTracker**:
-   - Tracks file access timestamps
-   - Identifies inactive files based on access patterns
-   - Moves inactive files to a designated folder
-   - Restores files when they're accessed again
-
-### Technology Stack
-
-1. **Core Technologies**:
-   - Python 3.6+: Main programming language
-   - Custom polling: File system monitoring without dependencies
-   - tkinter: GUI framework (part of Python standard library)
-   - threading: Concurrent operations
-   - logging: Application logging
-
-2. **File Operations**:
-   - os, shutil: File system operations
-   - json: Settings storage
-   - queue: Thread-safe communication
-   - argparse: Command-line argument parsing
-
-### Code Structure
-
-```
-FilesMover/
-├── scripts/               # Batch scripts for running the application
-│   ├── install.bat        # Installation script
-│   └── run_file_mover.bat # Main launcher script
-├── src/                   # Source code
-│   ├── file_mover/        # Main package
-│   │   ├── __init__.py    # Package initialization
-│   │   ├── core.py        # Core file processing functionality
-│   │   ├── cli.py         # Command line interface
-│   │   ├── gui.py         # Graphical user interface
-│   │   └── activity_tracker.py  # Activity tracking functionality
-│   ├── file_mover_cli.py  # CLI entry point
-│   └── file_mover_gui.py  # GUI entry point
-├── run.bat                # Convenience launcher for main app
-├── requirements.txt       # Python dependencies (minimal)
-├── README.md              # This documentation file
-└── LICENSE                # License information
-```
-
-### Development Guidelines
-
-#### Adding New Features
-
-1. **File Handling Extensions**:
-   - Add new methods to `FileProcessor` class in `core.py`
-   - Ensure proper error handling and logging
-   - Update GUI and CLI interfaces to expose new functionality
-
-2. **GUI Enhancements**:
-   - Add new widgets to appropriate sections in `gui.py`
-   - Update the settings storage mechanism if needed
-   - Maintain consistent styling and tooltips
-
-3. **CLI Options**:
-   - Add new arguments to the parser in `cli.py`
-   - Ensure backward compatibility with existing commands
-   - Update help documentation
-
-#### Coding Standards
-
-1. **Style Guidelines**:
-   - Follow PEP 8 for Python code style
-   - Use docstrings for all classes and methods
-   - Maintain consistent comment style
-
-2. **Error Handling**:
-   - Use appropriate try-except blocks
-   - Log all errors with sufficient context
-   - Display user-friendly error messages in GUI
-
-3. **Testing**:
-   - Test new features on multiple platforms
-   - Verify backward compatibility
-   - Test with various file types and directory structures
-
-## Additional Information
-
-### Version History
-
-- **0.3.0** - Removed external dependencies for file monitoring, improved performance
-- **0.2.0** - Added activity-based file organization and improved documentation
-- **0.1.0** - Initial release with basic file moving functionality
-
-### License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-### Acknowledgments
-
-- Built with Python and Tkinter
-- Designed to work with zero external dependencies
-- Thanks to all contributors and users for feedback and suggestions

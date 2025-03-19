@@ -22,6 +22,7 @@ from tkinter import ttk, filedialog, scrolledtext, messagebox
 import queue
 import json
 from .core import FileProcessor, DirectoryMonitor
+import sys
 
 # Define settings file path
 APP_DATA_DIR = os.path.join(os.path.expanduser('~'), '.file_mover')
@@ -971,11 +972,48 @@ class CreateToolTip:
             self.tooltip.destroy()
             self.tooltip = None
 
-def main():
-    """Main function to run the GUI."""
-    root = tk.Tk()
-    app = FileMoverGUI(root)
-    root.mainloop()
+def run_gui():
+    """
+    Main entry point for the FilesMover graphical user interface.
+    
+    This function creates the Tkinter root window, initializes the GUI,
+    and starts the main event loop.
+    
+    Returns:
+        int: Exit code (0 for success, non-zero for errors)
+    """
+    try:
+        # Create main window
+        root = tk.Tk()
+        root.title("FilesMover")
+        
+        # Set window icon if available
+        try:
+            icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+                                   "resources", "icons", "file_mover.ico")
+            if os.path.exists(icon_path):
+                root.iconbitmap(icon_path)
+        except Exception:
+            # Skip icon if unavailable
+            pass
+        
+        # Set default window size (80% of screen)
+        width = root.winfo_screenwidth() * 0.8
+        height = root.winfo_screenheight() * 0.8
+        root.geometry(f"{int(width)}x{int(height)}")
+        
+        # Create application
+        app = FileMoverGUI(root)
+        
+        # Start the main loop
+        root.mainloop()
+        return 0
+    except Exception as e:
+        print(f"Error starting GUI: {str(e)}")
+        return 1
+
+# For backward compatibility
+main = run_gui
 
 if __name__ == "__main__":
-    main() 
+    sys.exit(run_gui()) 

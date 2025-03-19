@@ -9,7 +9,7 @@ Functions:
     parse_arguments: Parse command line arguments
     setup_logging: Configure logging with appropriate level and output
     handle_keyboard_interrupt: Set up signal handler for clean shutdown
-    main: Main CLI entry point function
+    run_cli: Main CLI entry point function
 """
 
 import os
@@ -19,9 +19,10 @@ import logging
 import datetime
 import signal
 import sys
+from typing import Optional, Dict, Any, List, Tuple
 from .core import FileProcessor, DirectoryMonitor, start_monitoring
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     """
     Parse command line arguments.
     
@@ -195,84 +196,103 @@ def handle_keyboard_interrupt(monitor, processor):
     
     signal.signal(signal.SIGINT, signal_handler)
 
-def main():
+def run_cli() -> int:
     """
-    Main CLI function.
+    Main entry point for the FilesMover command-line interface.
     
-    This function serves as the entry point for the CLI interface, parsing
-    arguments, setting up logging, initializing the file processor, and
-    starting file processing according to the specified options.
+    This function serves as the main entry point for the CLI application,
+    handling argument parsing, setting up the file processor and monitor,
+    and starting the monitoring or processing operations.
     
     Returns:
-        int: Exit code (0 for success, 1 for error)
+        int: Exit code (0 for success, non-zero for errors)
     """
-    args = parse_arguments()
-    
-    # Setup logging
-    setup_logging(args.verbose, args.log_file)
-    
-    # Validate directories
-    source = os.path.abspath(args.source)
-    destination = os.path.abspath(args.destination)
-    
-    if not os.path.exists(source):
-        logging.error(f"Source directory does not exist: {source}")
-        try:
-            os.makedirs(source)
-            logging.info(f"Created source directory: {source}")
-        except Exception as e:
-            logging.error(f"Error creating source directory: {e}")
-            return 1
-    
-    if not os.path.exists(destination):
-        try:
-            os.makedirs(destination)
-            logging.info(f"Created destination directory: {destination}")
-        except Exception as e:
-            logging.error(f"Error creating destination directory: {e}")
-            return 1
-    
-    # Create processor
-    processor = FileProcessor(
-        source=source,
-        destination=destination,
-        conflict_mode=args.conflict_mode,
-        preserve_timestamps=args.preserve_timestamps,
-        confirm_operations=args.confirm_operations,
-        recursive=args.recursive,
-        processing_delay=args.processing_delay,
-        process_existing=not args.one_time
-    )
-    
-    if args.one_time:
-        # Process all files once
-        logging.info(f"Processing all files from {os.path.normpath(source)} to {os.path.normpath(destination)}...")
-        file_count = processor.process_all()
-        logging.info(f"Processed {file_count} files.")
-        return 0
-    else:
-        # Start monitoring
-        logging.info(f"Starting file monitoring from {os.path.normpath(source)} to {os.path.normpath(destination)}...")
-        monitor = DirectoryMonitor(processor, poll_interval=args.poll_interval)
+    try:
+        # Parse command line arguments
+        args = parse_arguments()
         
-        # Set up keyboard interrupt handler
-        handle_keyboard_interrupt(monitor, processor)
+        # Setup logging
+        setup_logging(args.verbose, args.log_file)
         
-        # Start monitoring and enter main loop
-        if monitor.start():
+        # Validate directories
+        if not os.path.isdir(args.source):
+            if args.create_dirs:
+                os.makedirs(args.source, exist_ok=True)
+                logging.info(f"Created source directory: {args.source}")
+            else:
+                logging.error(f"Source directory does not exist: {args.source}")
+                return 1
+                
+        if not os.path.isdir(args.destination):
+            if args.create_dirs:
+                os.makedirs(args.destination, exist_ok=True)
+                logging.info(f"Created destination directory: {args.destination}")
+            else:
+                logging.error(f"Destination directory does not exist: {args.destination}")
+                return 1
+        
+        # Configuration message
+        logging.info(f"Source: {args.source}")
+        logging.info(f"Destination: {args.destination}")
+        
+        if args.monitor:
+            # Start monitoring
+            logging.info("Starting directory monitoring...")
+            
+            # Use the convenience function to start monitoring
+            monitor = start_monitoring(
+                source=args.source,
+                destination=args.destination,
+                activity_tracking=args.activity_tracking,
+                conflict_mode=args.conflict_mode,
+                preserve_timestamps=not args.no_preserve_timestamps,
+                confirm_operations=args.confirm,
+                recursive=not args.no_recursive,
+                processing_delay=args.processing_delay,
+                poll_interval=args.poll_interval,
+                process_existing=not args.no_process_existing,
+                min_age=args.min_file_age,
+                adaptive_interval=not args.no_adaptive_interval
+            )
+            
+            # Set up signal handler for clean shutdown
+            handle_keyboard_interrupt(monitor.processor, monitor)
+            
             try:
                 # Keep the main thread alive
-                while True:
+                while monitor.running:
                     time.sleep(1)
             except KeyboardInterrupt:
+                logging.info("Stopping monitoring...")
                 monitor.stop()
-                logging.info("Monitoring stopped.")
-            return 0
         else:
-            logging.error("Failed to start monitoring.")
-            return 1
-    
-    return 0
+            # Create a file processor
+            processor = FileProcessor(
+                source=args.source,
+                destination=args.destination,
+                activity_tracking=args.activity_tracking,
+                conflict_mode=args.conflict_mode,
+                preserve_timestamps=not args.no_preserve_timestamps,
+                confirm_operations=args.confirm,
+                recursive=not args.no_recursive,
+                processing_delay=args.processing_delay
+            )
+            
+            # Process all files as a one-time operation
+            logging.info("Processing files (one-time operation)...")
+            processor.process_all()
+            logging.info("Finished processing files.")
+        
+        return 0
+    except Exception as e:
+        logging.error(f"An error occurred: {str(e)}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        return 1
+
+# For backward compatibility
+main = run_cli
 
 if __name__ == "__main__":
     sys.exit(main()) 

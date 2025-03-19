@@ -61,6 +61,8 @@ def create_desktop_shortcut():
             shortcut.WorkingDirectory = script_dir
             shortcut.IconLocation = os.path.join(script_dir, "scripts", "file_mover.ico")
             shortcut.Description = "FilesMover - Automatically move and organize files"
+            # Set window style to minimized (7) to hide the command window
+            shortcut.WindowStyle = 7
             shortcut.save()
             return True
         else:

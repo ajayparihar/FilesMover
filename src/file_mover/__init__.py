@@ -26,10 +26,22 @@ Functions:
 
 from .core import FileProcessor, DirectoryMonitor, start_monitoring
 from .activity_tracker import FileActivityTracker
+from .cli import run_cli
+from .gui import run_gui
 
-__all__ = ['FileProcessor', 'DirectoryMonitor', 'start_monitoring', 'FileActivityTracker']
+__all__ = [
+    # Core functionality
+    'FileProcessor', 
+    'DirectoryMonitor', 
+    'start_monitoring', 
+    'FileActivityTracker',
+    
+    # Entry points
+    'run_cli',
+    'run_gui'
+]
 
 # Package version information
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "Bheb Developer"
 __license__ = "MIT" 

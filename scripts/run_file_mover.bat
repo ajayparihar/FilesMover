@@ -56,27 +56,27 @@ goto :parse_args
 :run_program
 echo.
 if "%GUI_MODE%"=="true" (
-    echo Starting FilesMover in GUI mode...
-    echo.
-    python "%~dp0..\src\file_mover_gui.py"
+    REM Run GUI mode without showing console window
+    start "" pythonw "%~dp0..\src\file_mover_gui.py"
+    exit
 ) else (
     echo Starting FilesMover in CLI mode...
     echo.
     python "%~dp0..\src\file_mover_cli.py" %CLI_ARGS%
-)
 
-if %ERRORLEVEL% neq 0 (
+    if %ERRORLEVEL% neq 0 (
+        echo.
+        echo ======================================================
+        echo ERROR: FilesMover encountered a problem (code: %ERRORLEVEL%)
+        echo ======================================================
+        echo.
+        pause
+        exit /b %ERRORLEVEL%
+    )
+
     echo.
     echo ======================================================
-    echo ERROR: FilesMover encountered a problem (code: %ERRORLEVEL%)
+    echo FilesMover completed successfully
     echo ======================================================
-    echo.
-    pause
-    exit /b %ERRORLEVEL%
-)
-
-echo.
-echo ======================================================
-echo FilesMover completed successfully
-echo ======================================================
-echo. 
+    echo. 
+) 
