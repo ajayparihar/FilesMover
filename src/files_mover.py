@@ -7,6 +7,7 @@ import json
 from datetime import datetime
 import time
 import threading
+import hashlib
 
 # Configure logging
 logging.basicConfig(level=logging.INFO,
@@ -23,6 +24,13 @@ class FilesMover:
         self.is_monitoring = False
         self.monitor_thread = None
         self.last_check = {}  # Dictionary to store last modification times of files
+        self.pending_files = {}  # Files waiting to stabilize before processing
+        self.min_file_age = 0.5  # Minimum time in seconds a file must be unchanged
+        self.current_interval = 1.0  # Default polling interval
+        self.min_interval = 0.5  # Minimum polling interval when activity detected
+        self.max_interval = 5.0  # Maximum polling interval when idle
+        self.adaptive_interval = True  # Whether to use adaptive polling
+        self.last_poll_time = 0  # Timestamp of last poll
 
     def process_file(self, file_path):
         """Process a single file."""
@@ -126,31 +134,129 @@ class FilesMover:
                     
         except Exception as e:
             self.logger.error(f"Error processing existing files: {str(e)}")
+    
+    def _file_is_stable(self, filepath, metadata, now):
+        """
+        Check if a file is stable and ready for processing.
+        
+        Args:
+            filepath (str): Path to the file
+            metadata (dict): Current file metadata
+            now (float): Current timestamp
+            
+        Returns:
+            bool: True if file is stable, False otherwise
+        """
+        # Check if file can be opened (not in use)
+        try:
+            with open(filepath, 'rb') as f:
+                pass
+        except (IOError, PermissionError):
+            return False
+            
+        # Check if file is in pending files
+        if filepath in self.pending_files:
+            prev_metadata = self.pending_files[filepath]['metadata']
+            first_seen = self.pending_files[filepath]['first_seen']
+            
+            # Check if metadata changed
+            if (metadata['size'] != prev_metadata['size'] or 
+                metadata['mtime'] != prev_metadata['mtime']):
+                # File changed, update pending metadata
+                self.pending_files[filepath] = {
+                    'metadata': metadata,
+                    'first_seen': now
+                }
+                return False
+                
+            # Check if file has been stable for minimum age
+            if now - first_seen >= self.min_file_age:
+                # File is stable, remove from pending
+                del self.pending_files[filepath]
+                return True
+            
+            # File hasn't been stable long enough
+            return False
+        else:
+            # New file, add to pending
+            self.pending_files[filepath] = {
+                'metadata': metadata,
+                'first_seen': now
+            }
+            return False
+    
+    def _adjust_poll_interval(self, activity_detected):
+        """Adjust polling interval based on file system activity."""
+        if not self.adaptive_interval:
+            return
+            
+        if activity_detected:
+            # Activity detected, poll more frequently
+            self.current_interval = self.min_interval
+        else:
+            # No activity, gradually increase polling interval
+            self.current_interval = min(self.current_interval * 1.2, self.max_interval)
 
     def monitor_directory(self):
-        """Monitor the source directory for changes using polling."""
+        """Monitor the source directory for changes using improved polling."""
+        stable_files = set()
+        self.last_poll_time = time.time()
+        
         while self.is_monitoring:
             try:
-                # Process all files in the source directory
-                for dirpath, _, filenames in os.walk(self.source_dir):
-                    for filename in filenames:
-                        file_path = os.path.join(dirpath, filename)
-                        
-                        # Get current modification time
-                        current_mtime = os.path.getmtime(file_path)
-                        
-                        # Check if this is a new or modified file
-                        if file_path not in self.last_check or current_mtime > self.last_check[file_path]:
-                            self.process_file(file_path)
-                            self.last_check[file_path] = current_mtime
+                now = time.time()
                 
-                # Clean up last_check dictionary for files that no longer exist
-                for file_path in list(self.last_check.keys()):
-                    if not os.path.exists(file_path):
-                        del self.last_check[file_path]
+                # Check if it's time to poll based on adaptive interval
+                if now - self.last_poll_time >= self.current_interval:
+                    activity_detected = False
+                    
+                    # Process all files in the source directory
+                    current_files = {}
+                    for dirpath, _, filenames in os.walk(self.source_dir):
+                        for filename in filenames:
+                            file_path = os.path.join(dirpath, filename)
+                            
+                            try:
+                                # Get current stats
+                                stat = os.stat(file_path)
+                                metadata = {
+                                    'mtime': stat.st_mtime,
+                                    'size': stat.st_size
+                                }
+                                current_files[file_path] = metadata
+                                
+                                # Check if it's new or modified
+                                is_new = file_path not in self.last_check
+                                is_modified = (not is_new and 
+                                              (metadata['mtime'] > self.last_check[file_path]['mtime'] or
+                                               metadata['size'] != self.last_check[file_path]['size']))
+                                
+                                if is_new or is_modified:
+                                    activity_detected = True
+                                    
+                                    # Check if it's stable enough to process
+                                    if self._file_is_stable(file_path, metadata, now):
+                                        self.process_file(file_path)
+                                        stable_files.add(file_path)
+                            except (FileNotFoundError, PermissionError):
+                                # Skip files that can't be accessed
+                                pass
+                    
+                    # Check for deleted files to clean up tracking
+                    for file_path in list(self.last_check.keys()):
+                        if file_path not in current_files:
+                            if file_path in self.pending_files:
+                                del self.pending_files[file_path]
+                            if file_path in stable_files:
+                                stable_files.remove(file_path)
+                    
+                    # Update tracking and adjust polling interval
+                    self.last_check = current_files
+                    self.last_poll_time = now
+                    self._adjust_poll_interval(activity_detected)
                 
-                # Sleep for a short interval before next check
-                time.sleep(1)
+                # Sleep a small amount to prevent CPU spinning
+                time.sleep(0.1)
                 
             except Exception as e:
                 self.logger.error(f"Error in monitoring loop: {str(e)}")
