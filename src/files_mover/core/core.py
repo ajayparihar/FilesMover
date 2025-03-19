@@ -1,0 +1,614 @@
+"""
+Core file processing functionality for the FilesMover utility.
+
+This module provides the core file processing capabilities for moving and organizing files.
+It includes classes for handling file system monitoring, processing files, and monitoring directories.
+
+Classes:
+    DirectoryMonitor: Monitors directories for file changes
+    FileProcessor: Processes and moves files between directories
+
+Functions:
+    start_monitoring: Convenience function to start monitoring a directory
+"""
+
+import os
+import shutil
+import time
+import logging
+import datetime
+import threading
+import hashlib
+
+# Setup log directory
+LOG_DIR = os.path.join(os.path.expanduser('~'), '.file_mover', 'logs')
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Generate log filename with timestamp
+current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE = os.path.join(LOG_DIR, f"file_mover_{current_time}.log")
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler()
+    ]
+)
+
+class DirectoryMonitor:
+    """
+    Monitors a directory for changes and processes new or modified files.
+    
+    This class provides functionality to watch a directory for file system changes
+    without using external libraries. It uses an optimized polling approach with 
+    file metadata comparison and adaptive polling to detect changes.
+    
+    Attributes:
+        processor (FileProcessor): The processor used to handle file operations
+        poll_interval (float): Time in seconds between directory scans
+        running (bool): Flag indicating if monitoring is active
+        _snapshot (dict): Dictionary storing file metadata for change detection
+        _stable_files (set): Set of files that have stabilized and can be processed
+        _pending_files (dict): Files waiting to stabilize before processing
+        _min_age (float): Minimum time in seconds a file must be unchanged before processing
+        _last_poll_time (float): Timestamp of the last polling operation
+        _adaptive_interval (bool): Whether to use adaptive polling intervals
+    """
+    
+    def __init__(self, processor, poll_interval=1.0, min_age=0.5, adaptive_interval=True):
+        """
+        Initialize the directory monitor with a file processor.
+        
+        Args:
+            processor (FileProcessor): Instance to handle file operations
+            poll_interval (float): Time in seconds between directory scans
+            min_age (float): Minimum time in seconds a file must be unchanged before processing
+            adaptive_interval (bool): Whether to use adaptive polling intervals
+        """
+        self.processor = processor
+        self.poll_interval = poll_interval
+        self.min_age = min_age
+        self.running = False
+        self._snapshot = {}
+        self._stable_files = set()
+        self._pending_files = {}
+        self._monitor_thread = None
+        self._last_poll_time = 0
+        self._adaptive_interval = adaptive_interval
+        self._max_interval = poll_interval * 10
+        self._min_interval = poll_interval
+        self._current_interval = poll_interval
+        self._activity_detected = False
+    
+    def start(self):
+        """
+        Start monitoring the directory.
+        
+        Returns:
+            bool: True if monitoring started successfully, False otherwise
+        """
+        if self.running:
+            logging.warning("Monitoring is already running")
+            return False
+        
+        try:
+            # Take initial snapshot
+            self._snapshot = self._take_snapshot(self.processor.source)
+            self._last_poll_time = time.time()
+            
+            # Process any existing files first if configured
+            if self.processor.process_existing:
+                self.processor.process_all()
+            
+            # Start monitoring thread
+            self.running = True
+            self._monitor_thread = threading.Thread(target=self._monitor, daemon=True)
+            self._monitor_thread.start()
+            logging.info(f"Started monitoring directory: {self.processor.source}")
+            return True
+        except Exception as e:
+            logging.error(f"Failed to start monitoring: {e}")
+            self.running = False
+            return False
+    
+    def stop(self):
+        """
+        Stop monitoring the directory.
+        
+        Returns:
+            bool: True if monitoring stopped successfully, False otherwise
+        """
+        if not self.running:
+            logging.warning("Monitoring is not running")
+            return False
+        
+        self.running = False
+        if self._monitor_thread:
+            self._monitor_thread.join(timeout=3.0)
+        logging.info("Stopped monitoring directory")
+        return True
+    
+    def _take_snapshot(self, directory):
+        """
+        Take a snapshot of the directory contents.
+        
+        Args:
+            directory (str): Path to the directory to scan
+            
+        Returns:
+            dict: Dictionary mapping file paths to their metadata
+        """
+        snapshot = {}
+        try:
+            if self.processor.recursive:
+                for root, dirs, files in os.walk(directory):
+                    for filename in files:
+                        filepath = os.path.join(root, filename)
+                        try:
+                            stat = os.stat(filepath)
+                            # Store mtime, size, and inode for change detection
+                            snapshot[filepath] = {
+                                'mtime': stat.st_mtime,
+                                'size': stat.st_size,
+                                'inode': stat.st_ino
+                            }
+                        except (FileNotFoundError, PermissionError):
+                            # Skip files that can't be accessed
+                            pass
+            else:
+                for entry in os.scandir(directory):
+                    if entry.is_file():
+                        try:
+                            stat = entry.stat()
+                            snapshot[entry.path] = {
+                                'mtime': stat.st_mtime,
+                                'size': stat.st_size,
+                                'inode': stat.st_ino
+                            }
+                        except (FileNotFoundError, PermissionError):
+                            pass
+        except Exception as e:
+            logging.error(f"Error taking directory snapshot: {e}")
+        
+        return snapshot
+    
+    def _file_is_stable(self, filepath, metadata, now):
+        """
+        Check if a file is stable and ready for processing.
+        
+        A file is considered stable if:
+        1. It's not in use (can be opened for reading)
+        2. Its size and modification time haven't changed for a minimum period
+        
+        Args:
+            filepath (str): Path to the file
+            metadata (dict): Current file metadata
+            now (float): Current timestamp
+            
+        Returns:
+            bool: True if the file is stable, False otherwise
+        """
+        # Check if file can be opened (not in use)
+        try:
+            with open(filepath, 'rb') as f:
+                pass
+        except (IOError, PermissionError):
+            return False
+            
+        # Check if file is in pending files
+        if filepath in self._pending_files:
+            prev_metadata = self._pending_files[filepath]['metadata']
+            first_seen = self._pending_files[filepath]['first_seen']
+            
+            # Check if metadata changed
+            if (metadata['size'] != prev_metadata['size'] or 
+                metadata['mtime'] != prev_metadata['mtime']):
+                # File changed, update pending metadata
+                self._pending_files[filepath] = {
+                    'metadata': metadata,
+                    'first_seen': now
+                }
+                return False
+                
+            # Check if file has been stable for minimum age
+            if now - first_seen >= self.min_age:
+                # File is stable, remove from pending
+                del self._pending_files[filepath]
+                return True
+            
+            # File hasn't been stable long enough
+            return False
+        else:
+            # New file, add to pending
+            self._pending_files[filepath] = {
+                'metadata': metadata,
+                'first_seen': now
+            }
+            return False
+    
+    def _adjust_poll_interval(self, activity_detected):
+        """
+        Adjust the polling interval based on file system activity.
+        
+        If activity is detected, decrease the interval to poll more frequently.
+        If no activity is detected, gradually increase the interval up to the maximum.
+        
+        Args:
+            activity_detected (bool): Whether file system activity was detected
+        """
+        if not self._adaptive_interval:
+            return
+            
+        if activity_detected:
+            # Activity detected, poll more frequently
+            self._current_interval = self._min_interval
+            self._activity_detected = True
+        elif self._activity_detected:
+            # Recent activity but none now, keep polling frequently for a while
+            self._activity_detected = False
+        else:
+            # No recent activity, gradually increase polling interval
+            self._current_interval = min(self._current_interval * 1.5, self._max_interval)
+    
+    def _monitor(self):
+        """
+        Monitor the directory for changes.
+        
+        This method runs in a separate thread and periodically compares
+        directory snapshots to detect changes.
+        """
+        while self.running:
+            try:
+                now = time.time()
+                
+                # Check if it's time to poll based on adaptive interval
+                if now - self._last_poll_time >= self._current_interval:
+                    activity_detected = False
+                    new_snapshot = self._take_snapshot(self.processor.source)
+                    
+                    # Find new or modified files
+                    for filepath, metadata in new_snapshot.items():
+                        # File is new or modified
+                        if filepath not in self._snapshot or self._has_changed(filepath, metadata):
+                            activity_detected = True
+                            # Check if it's a directory
+                            if os.path.isdir(filepath):
+                                self.processor.process_directory(filepath)
+                            # Check if file is stable enough to process
+                            elif self._file_is_stable(filepath, metadata, now):
+                                self.processor.process_file(filepath)
+                                self._stable_files.add(filepath)
+                    
+                    # Look for deleted files to cleanup
+                    for filepath in set(self._snapshot.keys()):
+                        if filepath not in new_snapshot:
+                            if filepath in self._pending_files:
+                                del self._pending_files[filepath]
+                            if filepath in self._stable_files:
+                                self._stable_files.remove(filepath)
+                    
+                    # Update snapshot and timestamps
+                    self._snapshot = new_snapshot
+                    self._last_poll_time = now
+                    
+                    # Adjust poll interval
+                    self._adjust_poll_interval(activity_detected)
+                
+                # Sleep a small amount to prevent excessive CPU usage
+                time.sleep(0.1)
+                
+            except Exception as e:
+                logging.error(f"Error during directory monitoring: {e}")
+                time.sleep(1)  # Sleep and try again
+                
+    def _has_changed(self, filepath, current_metadata):
+        """
+        Check if a file has changed from its previous state.
+        
+        Args:
+            filepath (str): Path to the file
+            current_metadata (dict): Current file metadata
+            
+        Returns:
+            bool: True if the file has changed, False otherwise
+        """
+        previous = self._snapshot[filepath]
+        
+        # Check size and modification time
+        if (current_metadata['size'] != previous['size'] or 
+            current_metadata['mtime'] > previous['mtime']):
+            return True
+            
+        # Files with same size and mtime could still be different
+        # Only do deeper check for small files to avoid performance impact
+        if (current_metadata['size'] < 1024 * 1024 and  # Only check files smaller than 1MB
+            current_metadata['size'] == previous['size'] and
+            current_metadata['mtime'] == previous['mtime'] and
+            current_metadata['inode'] != previous['inode']):  # Different inode suggests file was replaced
+            
+            try:
+                # Compare file content hash
+                with open(filepath, 'rb') as f:
+                    file_hash = hashlib.md5(f.read()).hexdigest()
+                
+                if hasattr(previous, 'hash'):
+                    if file_hash != previous['hash']:
+                        # Update hash and return changed
+                        current_metadata['hash'] = file_hash
+                        return True
+                else:
+                    # Store hash for future comparison
+                    current_metadata['hash'] = file_hash
+            except (IOError, PermissionError):
+                # If we can't read the file, assume it changed
+                return True
+                
+        return False
+
+class FileProcessor:
+    """
+    Processes and moves files between directories.
+    
+    This class provides functionality to process files according to
+    predefined rules and move them to appropriate destinations.
+    
+    Attributes:
+        source (str): Source directory path
+        destination (str): Destination directory path
+        activity_tracking (bool): Whether to track file activity
+        conflict_mode (str): How to handle file conflicts
+        preserve_timestamps (bool): Whether to preserve file timestamps
+        confirm_operations (bool): Whether to confirm destructive operations
+        recursive (bool): Whether to process subdirectories
+        processing_delay (float): Delay in seconds before processing files
+        process_existing (bool): Whether to process existing files on startup
+    """
+    
+    def __init__(self, source, destination, activity_tracking=False, 
+                 conflict_mode="rename", preserve_timestamps=True, 
+                 confirm_operations=False, recursive=True, 
+                 processing_delay=0.0, process_existing=True):
+        """
+        Initialize the file processor with the given parameters.
+        
+        Args:
+            source (str): Source directory path
+            destination (str): Destination directory path
+            activity_tracking (bool, optional): Whether to track file activity
+            conflict_mode (str, optional): How to handle file conflicts
+            preserve_timestamps (bool, optional): Whether to preserve file timestamps
+            confirm_operations (bool, optional): Whether to confirm destructive operations
+            recursive (bool, optional): Whether to process subdirectories
+            processing_delay (float, optional): Delay in seconds before processing files
+            process_existing (bool, optional): Whether to process existing files on startup
+        """
+        self.source = os.path.abspath(source)
+        self.destination = os.path.abspath(destination)
+        self.activity_tracking = activity_tracking
+        self.conflict_mode = conflict_mode
+        self.preserve_timestamps = preserve_timestamps
+        self.confirm_operations = confirm_operations
+        self.recursive = recursive
+        self.processing_delay = processing_delay
+        self.process_existing = process_existing
+        
+        # Create destination if it doesn't exist
+        os.makedirs(self.destination, exist_ok=True)
+        
+        # Validate paths
+        if not os.path.isdir(self.source):
+            raise ValueError(f"Source directory does not exist: {self.source}")
+        if not os.path.isdir(self.destination):
+            raise ValueError(f"Destination directory could not be created: {self.destination}")
+    
+    def process_file(self, src_path):
+        """
+        Process a single file by moving it to the destination.
+        
+        This method moves a file from the source directory to the corresponding
+        location in the destination directory, preserving the relative path.
+        
+        Args:
+            src_path (str): Absolute path to the source file
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Check if file exists (it might have been processed already by another event)
+        if not os.path.exists(src_path) or os.path.isdir(src_path):
+            return False
+            
+        # Apply processing delay if set
+        if self.processing_delay > 0:
+            time.sleep(self.processing_delay)
+            # Check again if file exists after delay
+            if not os.path.exists(src_path):
+                return False
+                
+        # Calculate the relative path from the source directory
+        rel_path = os.path.relpath(src_path, self.source)
+        dest_path = os.path.join(self.destination, rel_path)
+        
+        # Create destination directory if it doesn't exist
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        
+        # Handle file conflicts
+        if os.path.exists(dest_path):
+            if self.conflict_mode == "skip":
+                logging.info(f"Skipped (already exists): {rel_path}")
+                return False
+            elif self.conflict_mode == "rename":
+                # Find a new name by appending a number
+                base_name, ext = os.path.splitext(dest_path)
+                counter = 1
+                while os.path.exists(f"{base_name}_{counter}{ext}"):
+                    counter += 1
+                dest_path = f"{base_name}_{counter}{ext}"
+                logging.info(f"Renamed due to conflict: {os.path.basename(src_path)} → {os.path.basename(dest_path)}")
+            # For "replace" mode, we'll just overwrite
+        
+        try:
+            # Store the source directory and file stats for later
+            source_dir = os.path.dirname(src_path)
+            
+            # Preserve timestamps if enabled
+            if self.preserve_timestamps:
+                file_stats = os.stat(src_path)
+                
+            # Move the file
+            shutil.move(src_path, dest_path)
+            
+            # Restore timestamps if enabled
+            if self.preserve_timestamps:
+                os.utime(dest_path, (file_stats.st_atime, file_stats.st_mtime))
+                
+            # Log the move operation with a more concise message
+            if rel_path == os.path.relpath(dest_path, self.destination):
+                logging.info(f"Moved: {rel_path}")
+            else:
+                logging.info(f"Moved: {rel_path} → {os.path.relpath(dest_path, self.destination)}")
+            
+            # Check if the source directory is now empty and remove it if it is
+            if os.path.exists(source_dir) and len(os.listdir(source_dir)) == 0:
+                # Only remove directories under the source root
+                if os.path.commonpath([source_dir, self.source]) == self.source and source_dir != self.source:
+                    try:
+                        os.rmdir(source_dir)
+                        logging.info(f"Removed empty directory: {os.path.relpath(source_dir, self.source)}")
+                    except OSError as e:
+                        logging.warning(f"Could not remove empty directory {os.path.relpath(source_dir, self.source)}: {e}")
+            
+            return True
+        except (shutil.Error, PermissionError, OSError) as e:
+            logging.error(f"Error moving {rel_path}: {e}")
+            return False
+    
+    def process_all(self):
+        """
+        Process all files in the source directory.
+        
+        This method walks through the source directory and moves all files
+        to the destination directory, preserving the directory structure.
+        It also removes empty directories in the source afterward.
+        
+        Returns:
+            int: Number of files processed
+        """
+        file_count = 0
+        
+        # First, collect all files to process
+        files_to_process = []
+        for root, _, files in os.walk(self.source, topdown=False):
+            for file in files:
+                src_path = os.path.join(root, file)
+                files_to_process.append(src_path)
+        
+        # Process each file
+        for src_path in files_to_process:
+            if self.process_file(src_path):
+                file_count += 1
+        
+        # Now clean up any remaining empty directories
+        for root, dirs, files in os.walk(self.source, topdown=False):
+            # topdown=False ensures we process deepest directories first
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                if len(os.listdir(dir_path)) == 0:
+                    try:
+                        os.rmdir(dir_path)
+                        logging.info(f"Removed empty directory: {os.path.relpath(dir_path, self.source)}")
+                    except OSError as e:
+                        logging.warning(f"Could not remove empty directory {os.path.relpath(dir_path, self.source)}: {e}")
+                
+        return file_count
+
+    def process_directory(self, src_dir):
+        """
+        Process a directory by creating the corresponding directory in the destination.
+        
+        This method creates a directory in the destination that matches the structure
+        of the source directory. If the directory already exists in the destination,
+        it will be kept as is.
+        
+        Args:
+            src_dir (str): Absolute path to the source directory
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Check if directory exists
+        if not os.path.exists(src_dir) or not os.path.isdir(src_dir):
+            return False
+            
+        # Calculate the relative path from the source directory
+        rel_path = os.path.relpath(src_dir, self.source)
+        dest_dir = os.path.join(self.destination, rel_path)
+        
+        # Create destination directory if it doesn't exist
+        try:
+            if not os.path.exists(dest_dir):
+                os.makedirs(dest_dir, exist_ok=True)
+                logging.info(f"Created directory: {rel_path}")
+            return True
+        except OSError as e:
+            logging.error(f"Error creating directory {rel_path}: {e}")
+            return False
+
+def start_monitoring(source, destination, activity_tracking=False, 
+                   conflict_mode="rename", preserve_timestamps=True, 
+                   confirm_operations=False, recursive=True,
+                   processing_delay=0.0, poll_interval=1.0,
+                   process_existing=True, min_age=0.5, 
+                   adaptive_interval=True):
+    """
+    Start monitoring a directory for changes.
+    
+    This is a convenience function to create a FileProcessor and DirectoryMonitor
+    and start monitoring a directory for changes. It handles all the setup and
+    initialization of the monitoring process.
+    
+    Args:
+        source (str): Source directory path
+        destination (str): Destination directory path
+        activity_tracking (bool, optional): Whether to track file activity
+        conflict_mode (str, optional): How to handle file conflicts
+        preserve_timestamps (bool, optional): Whether to preserve file timestamps
+        confirm_operations (bool, optional): Whether to confirm destructive operations
+        recursive (bool, optional): Whether to process subdirectories
+        processing_delay (float, optional): Delay in seconds before processing files
+        poll_interval (float, optional): Time in seconds between directory scans
+        process_existing (bool, optional): Whether to process existing files on startup
+        min_age (float, optional): Minimum time in seconds a file must be unchanged before processing
+        adaptive_interval (bool, optional): Whether to use adaptive polling intervals
+        
+    Returns:
+        tuple: (FileProcessor, DirectoryMonitor) instances
+    """
+    # Create processor and monitor
+    processor = FileProcessor(
+        source=source,
+        destination=destination,
+        activity_tracking=activity_tracking,
+        conflict_mode=conflict_mode,
+        preserve_timestamps=preserve_timestamps,
+        confirm_operations=confirm_operations,
+        recursive=recursive,
+        processing_delay=processing_delay,
+        process_existing=process_existing
+    )
+    
+    monitor = DirectoryMonitor(
+        processor=processor,
+        poll_interval=poll_interval,
+        min_age=min_age,
+        adaptive_interval=adaptive_interval
+    )
+    
+    # Start monitoring
+    monitor.start()
+    
+    return processor, monitor 

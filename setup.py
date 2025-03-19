@@ -12,7 +12,7 @@ with open(os.path.join(os.path.dirname(__file__), "README.md"), encoding="utf-8"
 
 # Get version from the package
 version = {}
-with open(os.path.join("src", "file_mover", "__init__.py")) as f:
+with open(os.path.join("src", "files_mover", "__init__.py")) as f:
     exec(f.read(), version)
 
 setup(
@@ -40,9 +40,9 @@ setup(
     python_requires=">=3.7",
     entry_points={
         "console_scripts": [
-            "files-mover=file_mover.main:main",
-            "files-mover-cli=file_mover.cli:run_cli",
-            "files-mover-gui=file_mover.gui:run_gui",
+            "files-mover=files_mover.main:main",
+            "files-mover-cli=files_mover.cli.cli:run_cli",
+            "files-mover-gui=files_mover.gui.gui:run_gui",
         ],
     },
     install_requires=[],

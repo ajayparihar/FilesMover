@@ -14,6 +14,25 @@ A simple tool to automatically monitor and move files from a source directory to
 - **Processing delay control** - prevents processing incomplete files
 - **Detailed activity logging**
 
+## Project Structure
+
+The project is organized as follows:
+
+```
+FilesMover/
+├── docs/                 # Documentation
+├── examples/             # Example configurations and usage
+├── scripts/              # Utility scripts
+├── src/                  # Source code
+│   └── files_mover/      # Main package
+│       ├── cli/          # Command-line interface
+│       ├── core/         # Core functionality
+│       ├── gui/          # Graphical user interface
+│       └── utils/        # Utility functions
+├── tests/                # Test suite
+└── ...
+```
+
 ## Installation
 
 ### Prerequisites

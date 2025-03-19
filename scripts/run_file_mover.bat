@@ -57,12 +57,12 @@ goto :parse_args
 echo.
 if "%GUI_MODE%"=="true" (
     REM Run GUI mode without showing console window
-    start "" pythonw "%~dp0..\src\file_mover_gui.py"
+    start "" pythonw "%~dp0..\run.py" --gui
     exit
 ) else (
     echo Starting FilesMover in CLI mode...
     echo.
-    python "%~dp0..\src\file_mover_cli.py" %CLI_ARGS%
+    python "%~dp0..\run.py" %CLI_ARGS%
 
     if %ERRORLEVEL% neq 0 (
         echo.

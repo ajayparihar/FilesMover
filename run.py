@@ -37,12 +37,12 @@ if __name__ == "__main__":
     
     if use_gui:
         # Launch the GUI version
-        from file_mover.gui import run_gui
+        from files_mover.gui.gui import run_gui
         sys.exit(run_gui())
     else:
         # Update sys.argv with remaining arguments
         sys.argv[1:] = remaining_args
         
         # Launch the CLI version
-        from file_mover.cli import run_cli
+        from files_mover.cli.cli import run_cli
         sys.exit(run_cli()) 
